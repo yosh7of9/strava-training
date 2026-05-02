@@ -117,6 +117,20 @@
                     mode: 'index',
                     intersect: false,
                 },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            afterBody: function(context) {
+                                const dataIndex = context[0].dataIndex;
+                                const dailyTss = data.daily_tss[dataIndex];
+                                return `\nDaily TSS: ${dailyTss}`;
+                            }
+                        }
+                    },
+                    legend: {
+                        position: window.innerWidth < 768 ? 'bottom' : 'top',
+                    }
+                },
                 scales: {
                     x: {
                         display: true,
@@ -138,11 +152,6 @@
                         position: 'right',
                         title: { display: true, text: 'TSB' },
                         grid: { drawOnChartArea: false }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        position: window.innerWidth < 768 ? 'bottom' : 'top',
                     }
                 }
             }

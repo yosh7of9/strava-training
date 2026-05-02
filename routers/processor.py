@@ -79,6 +79,7 @@ async def process_activity(request: Request):
     # Add new entry or update today's entry
     new_entry = {
         "date": today_str,
+        "tss": round(tss, 1),
         "ctl": round(new_ctl, 1),
         "atl": round(new_atl, 1),
         "tsb": round(new_ctl - new_atl, 1)

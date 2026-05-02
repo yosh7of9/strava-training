@@ -18,12 +18,14 @@ async def get_pmc_data(request: Request):
     history = user_doc.to_dict().get("pmc_history", [])
     
     dates = [item["date"] for item in history]
+    daily_tss = [item.get("tss", 0) for item in history]
     ctl = [item["ctl"] for item in history]
     atl = [item["atl"] for item in history]
     tsb = [item["tsb"] for item in history]
     
     return {
         "dates": dates,
+        "daily_tss": daily_tss,
         "ctl": ctl,
         "atl": atl,
         "tsb": tsb

@@ -97,6 +97,7 @@ async def initial_sync(request: Request):
         
         pmc_history.append({
             "date": date_str,
+            "tss": round(tss_today, 1),
             "ctl": round(ctl, 1),
             "atl": round(atl, 1),
             "tsb": round(ctl - atl, 1)
