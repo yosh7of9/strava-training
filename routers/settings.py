@@ -32,7 +32,14 @@ async def update_settings(
     ftp: int = Form(...),
     max_hr: int = Form(...),
     initial_ctl: float = Form(0.0),
-    initial_atl: float = Form(0.0)
+    initial_atl: float = Form(0.0),
+    schedule_mon: str = Form("Endurance"),
+    schedule_tue: str = Form("SST"),
+    schedule_wed: str = Form("Endurance"),
+    schedule_thu: str = Form("Threshold"),
+    schedule_fri: str = Form("Endurance"),
+    schedule_sat: str = Form("Long Endurance"),
+    schedule_sun: str = Form("Rest"),
 ):
     user_id = request.session.get("user_id")
     if not user_id:
@@ -45,7 +52,16 @@ async def update_settings(
         "ftp": ftp,
         "max_hr": max_hr,
         "initial_ctl": initial_ctl,
-        "initial_atl": initial_atl
+        "initial_atl": initial_atl,
+        "weekly_schedule": {
+            "mon": schedule_mon,
+            "tue": schedule_tue,
+            "wed": schedule_wed,
+            "thu": schedule_thu,
+            "fri": schedule_fri,
+            "sat": schedule_sat,
+            "sun": schedule_sun,
+        }
     }
     
     user_ref.update(update_data)
