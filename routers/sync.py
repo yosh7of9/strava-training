@@ -52,24 +52,31 @@ async def initial_sync(request: Request):
     ftp = user_data.get("ftp", 200)
     max_hr = user_data.get("max_hr", 190)
     
-    # We fetch activities for the last 60 days
-    # CTL is a 42-day average. If the user was blank for months and started 2 weeks ago,
-    # 60 days is perfect to capture the recent ramp up, starting from 0.
-    start_date = datetime.now(timezone.utc) - timedelta(days=60)
+    # We fetch activities for the last 365 days (1 year)
+    # CTL is a 42-day average. Capturing 1 year gives us a long-term PMC chart.
+    start_date = datetime.now(timezone.utc) - timedelta(days=365)
     start_timestamp = int(start_date.timestamp())
     
-    url = f"https://www.strava.com/api/v3/athlete/activities?after={start_timestamp}&per_page=100"
     headers = {"Authorization": f"Bearer {access_token}"}
+    activities = []
     
     async with httpx.AsyncClient() as client:
-        response = await client.get(url, headers=headers)
-        
-    if response.status_code == 401:
-        # Token expired. Clear session and force re-login
-        request.session.clear()
-        return RedirectResponse(url="/auth/login", status_code=303)
-        
-    activities = response.json()
+        page = 1
+        while True:
+            url = f"https://www.strava.com/api/v3/athlete/activities?after={start_timestamp}&per_page=100&page={page}"
+            response = await client.get(url, headers=headers)
+            
+            if response.status_code == 401:
+                # Token expired. Clear session and force re-login
+                request.session.clear()
+                return RedirectResponse(url="/auth/login", status_code=303)
+                
+            page_activities = response.json()
+            if not page_activities:
+                break
+                
+            activities.extend(page_activities)
+            page += 1
     
     # Group activities by day (YYYY-MM-DD)
     daily_tss = {}
@@ -110,7 +117,7 @@ async def initial_sync(request: Request):
         "initial_ctl": round(ctl, 1),
         "initial_atl": round(atl, 1),
         "last_sync_date": today.strftime("%Y-%m-%d"),
-        "pmc_history": pmc_history[-90:]  # Keep up to 90 days of history
+        "pmc_history": pmc_history[-1095:]  # Keep up to 1095 days of history (3 years)
     })
     
     return RedirectResponse(url="/dashboard", status_code=303)

@@ -57,29 +57,53 @@
 
 <!-- PMC Chart -->
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-2 md:p-6 w-full mb-8">
-    <h2 class="text-lg font-bold text-gray-800 mb-4 px-2">Performance Management Chart</h2>
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 px-2">
+        <h2 class="text-lg font-bold text-gray-800 mb-2 sm:mb-0">Performance Management Chart</h2>
+        <div class="flex space-x-2">
+            <button onclick="updateChartRange(30)" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">1M</button>
+            <button onclick="updateChartRange(90)" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-800 text-white hover:bg-gray-700 transition-colors">3M</button>
+            <button onclick="updateChartRange(180)" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">6M</button>
+            <button onclick="updateChartRange(365)" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">1Y</button>
+            <button onclick="updateChartRange(0)" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">All</button>
+        </div>
+    </div>
     <div class="relative w-full h-[300px] md:h-[500px]">
         <canvas id="pmcChart"></canvas>
     </div>
 </div>
 
 <script>
-    // Fetch PMC Data and Render Chart
-    async function renderChart() {
-        const response = await fetch('/api/pmc-data');
-        if (!response.ok) return;
-        const data = await response.json();
+    let pmcChartInstance = null;
+    let fullData = null;
+
+    function filterData(data, days) {
+        if (!days || days <= 0 || data.dates.length <= days) return data;
         
+        const startIdx = data.dates.length - days;
+        return {
+            dates: data.dates.slice(startIdx),
+            daily_tss: data.daily_tss.slice(startIdx),
+            ctl: data.ctl.slice(startIdx),
+            atl: data.atl.slice(startIdx),
+            tsb: data.tsb.slice(startIdx)
+        };
+    }
+
+    function renderChartData(dataToRender) {
         const ctx = document.getElementById('pmcChart').getContext('2d');
         
-        new Chart(ctx, {
+        if (pmcChartInstance) {
+            pmcChartInstance.destroy();
+        }
+        
+        pmcChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: data.dates,
+                labels: dataToRender.dates,
                 datasets: [
                     {
                         label: 'TSB (Form)',
-                        data: data.tsb,
+                        data: dataToRender.tsb,
                         type: 'bar',
                         backgroundColor: (ctx) => {
                             const val = ctx.raw;
@@ -91,7 +115,7 @@
                     },
                     {
                         label: 'CTL (Fitness)',
-                        data: data.ctl,
+                        data: dataToRender.ctl,
                         borderColor: 'rgb(37, 99, 235)',
                         backgroundColor: 'rgba(37, 99, 235, 0.1)',
                         fill: true,
@@ -101,7 +125,7 @@
                     },
                     {
                         label: 'ATL (Fatigue)',
-                        data: data.atl,
+                        data: dataToRender.atl,
                         borderColor: 'rgb(249, 115, 22)',
                         borderDash: [5, 5],
                         pointRadius: 0,
@@ -122,7 +146,7 @@
                         callbacks: {
                             afterBody: function(context) {
                                 const dataIndex = context[0].dataIndex;
-                                const dailyTss = data.daily_tss[dataIndex];
+                                const dailyTss = dataToRender.daily_tss[dataIndex];
                                 return `\nDaily TSS: ${dailyTss}`;
                             }
                         }
@@ -157,7 +181,33 @@
             }
         });
     }
+
+    async function loadData() {
+        const response = await fetch('/api/pmc-data');
+        if (!response.ok) return;
+        fullData = await response.json();
+        
+        // Default to 30 days (1M) view
+        updateChartRange(30);
+    }
     
-    renderChart();
+    function updateChartRange(days) {
+        if (!fullData) return;
+        
+        // Update button styles
+        const buttons = document.querySelectorAll('button[onclick^="updateChartRange"]');
+        buttons.forEach(btn => {
+            if (btn.getAttribute('onclick') === `updateChartRange(${days})`) {
+                btn.className = "px-3 py-1 text-xs font-medium rounded-md bg-gray-800 text-white hover:bg-gray-700 transition-colors";
+            } else {
+                btn.className = "px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors";
+            }
+        });
+
+        const filtered = filterData(fullData, days);
+        renderChartData(filtered);
+    }
+    
+    loadData();
 </script>
 {% endblock %}

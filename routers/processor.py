@@ -94,7 +94,7 @@ async def process_activity(request: Request):
         "initial_ctl": round(new_ctl, 1),
         "initial_atl": round(new_atl, 1),
         "last_sync_date": today_str,
-        "pmc_history": pmc_history[-90:] # Keep last 90 days
+        "pmc_history": pmc_history[-1095:] # Keep last 1095 days (3 years)
     })
     
     # Save the activity record for PMC graph
