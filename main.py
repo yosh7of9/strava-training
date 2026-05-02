@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 from core.config import settings
-from routers import auth, settings as settings_router, sync as sync_router, webhook, processor, api as api_router
+from routers import auth, settings as settings_router, sync as sync_router, webhook, processor, api as api_router, recommend as recommend_router
 from core.database import get_db
 
 app = FastAPI(title="Strava Training Dashboard")
@@ -25,6 +25,7 @@ app.include_router(sync_router.router)
 app.include_router(webhook.router)
 app.include_router(processor.router)
 app.include_router(api_router.router)
+app.include_router(recommend_router.router)
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):

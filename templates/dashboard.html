@@ -33,6 +33,28 @@
     </form>
 </div>
 
+<!-- Today's Recommendation -->
+<div id="recommendCard" class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 w-full mb-6 md:mb-8">
+    <div class="flex items-center mb-3">
+        <span id="recommendEmoji" class="text-3xl mr-3">⏳</span>
+        <div>
+            <h2 class="text-base font-bold text-gray-800">Today's Recommendation</h2>
+            <p id="recommendLabel" class="text-sm text-gray-500">Loading...</p>
+        </div>
+        <div class="ml-auto text-right">
+            <span class="text-xs text-gray-400">Duration</span>
+            <p id="recommendDuration" class="text-sm font-semibold text-gray-700">—</p>
+        </div>
+        <div class="ml-4 text-right">
+            <span class="text-xs text-gray-400">Intensity</span>
+            <p id="recommendIntensity" class="text-sm font-semibold text-gray-700">—</p>
+        </div>
+    </div>
+    <p id="recommendDescription" class="text-sm text-gray-600 mb-2"></p>
+    <p id="recommendDetails" class="text-xs text-gray-500 bg-gray-50 rounded-lg p-3"></p>
+    <div id="recommendWarning" class="mt-2 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-3 py-2 hidden"></div>
+</div>
+
 <!-- Metrics Overview -->
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
@@ -54,6 +76,7 @@
         <span class="text-3xl md:text-4xl font-extrabold text-gray-800">{{ user.ftp }}</span>
     </div>
 </div>
+
 
 <!-- PMC Chart -->
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-2 md:p-6 w-full mb-8">
@@ -137,12 +160,17 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: window.innerWidth < 768 ? { left: -5, right: 0, top: 10, bottom: 0 } : 10
+                },
                 interaction: {
                     mode: 'index',
                     intersect: false,
                 },
                 plugins: {
                     tooltip: {
+                        enabled: true,
+                        position: 'nearest',
                         callbacks: {
                             afterBody: function(context) {
                                 const dataIndex = context[0].dataIndex;
@@ -153,6 +181,11 @@
                     },
                     legend: {
                         position: window.innerWidth < 768 ? 'bottom' : 'top',
+                        labels: {
+                            boxWidth: window.innerWidth < 768 ? 12 : 40,
+                            padding: window.innerWidth < 768 ? 10 : 20,
+                            font: { size: window.innerWidth < 768 ? 10 : 12 }
+                        }
                     }
                 },
                 scales: {
@@ -160,26 +193,69 @@
                         display: true,
                         grid: { display: false },
                         ticks: {
-                            maxTicksLimit: 15
+                            maxTicksLimit: window.innerWidth < 768 ? 8 : 15,
+                            font: { size: window.innerWidth < 768 ? 10 : 12 },
+                            callback: function(val, index) {
+                                const dateStr = dataToRender.dates[index];
+                                if (!dateStr) return '';
+                                const parts = dateStr.split('-');
+                                if (window.innerWidth < 768) {
+                                    const mmdd = `${parts[1]}/${parts[2]}`;
+                                    // Show year on the first tick or when the year changes
+                                    const prevDateStr = index > 0 ? dataToRender.dates[index - 1] : null;
+                                    const prevYear = prevDateStr ? prevDateStr.split('-')[0] : null;
+                                    if (index === 0 || parts[0] !== prevYear) {
+                                        return [mmdd, parts[0]];
+                                    }
+                                    return mmdd;
+                                }
+                                return dateStr;
+                            }
                         }
                     },
                     y: {
                         type: 'linear',
                         display: true,
                         position: 'left',
-                        title: { display: true, text: 'TSS / Day' },
-                        min: 0
+                        title: { 
+                            display: window.innerWidth >= 768, 
+                            text: 'TSS / Day' 
+                        },
+                        min: 0,
+                        ticks: {
+                            font: { size: window.innerWidth < 768 ? 9 : 12 },
+                            padding: window.innerWidth < 768 ? 2 : 10
+                        }
                     },
                     y1: {
                         type: 'linear',
                         display: true,
                         position: 'right',
-                        title: { display: true, text: 'TSB' },
-                        grid: { drawOnChartArea: false }
+                        title: { 
+                            display: window.innerWidth >= 768, 
+                            text: 'TSB' 
+                        },
+                        grid: { drawOnChartArea: false },
+                        ticks: {
+                            font: { size: window.innerWidth < 768 ? 9 : 12 },
+                            padding: window.innerWidth < 768 ? 2 : 10
+                        }
                     }
                 }
             }
         });
+        
+        // Fix for mobile tooltip sticking: 
+        // Clear active elements when clicking/touching outside the drawing area
+        if (window.innerWidth < 768) {
+            ctx.canvas.addEventListener('click', (e) => {
+                const activePoints = pmcChartInstance.getElementsAtEventForMode(e, 'index', { intersect: false }, true);
+                if (activePoints.length === 0) {
+                    pmcChartInstance.setActiveElements([]);
+                    pmcChartInstance.update();
+                }
+            });
+        }
     }
 
     async function loadData() {
@@ -209,5 +285,41 @@
     }
     
     loadData();
+
+    // Load today's recommendation
+    async function loadRecommendation() {
+        try {
+            const res = await fetch('/recommend/today');
+            if (!res.ok) return;
+            const d = await res.json();
+            const t = d.training;
+            const colorMap = {
+                gray: 'border-gray-200 bg-gray-50',
+                green: 'border-green-200 bg-green-50',
+                blue: 'border-blue-200 bg-blue-50',
+                teal: 'border-teal-200 bg-teal-50',
+                yellow: 'border-yellow-200 bg-yellow-50',
+                orange: 'border-orange-200 bg-orange-50',
+                red: 'border-red-200 bg-red-50',
+                purple: 'border-purple-200 bg-purple-50',
+            };
+            const card = document.getElementById('recommendCard');
+            if (colorMap[t.color]) {
+                card.className = card.className.replace('border-gray-100', '') + ' border ' + colorMap[t.color];
+            }
+            document.getElementById('recommendEmoji').textContent = t.emoji;
+            document.getElementById('recommendLabel').textContent = t.label;
+            document.getElementById('recommendDescription').textContent = t.description;
+            document.getElementById('recommendDetails').textContent = t.details;
+            document.getElementById('recommendDuration').textContent = t.duration;
+            document.getElementById('recommendIntensity').textContent = t.intensity;
+            const warning = document.getElementById('recommendWarning');
+            if (d.warning) {
+                warning.textContent = d.warning;
+                warning.classList.remove('hidden');
+            }
+        } catch(e) { console.error('Recommendation fetch failed', e); }
+    }
+    loadRecommendation();
 </script>
 {% endblock %}
