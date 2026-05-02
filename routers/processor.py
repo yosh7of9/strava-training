@@ -5,8 +5,50 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Request, Response, status
 from core.database import get_db
 from routers.sync import calculate_tss
+from core.config import settings
 
 router = APIRouter(prefix="/processor", tags=["processor"])
+
+async def get_valid_access_token(user_ref, user_data):
+    """
+    Checks if token is expired and refreshes if necessary.
+    """
+    expires_at = user_data.get("expires_at", 0)
+    now = datetime.now(timezone.utc).timestamp()
+    
+    if now < expires_at - 60: # 1 minute margin
+        return user_data.get("access_token")
+        
+    print(f"Token expired for user {user_ref.id}. Refreshing...")
+    
+    refresh_token = user_data.get("refresh_token")
+    if not refresh_token:
+        return None
+        
+    url = "https://www.strava.com/oauth/token"
+    data = {
+        "client_id": settings.STRAVA_CLIENT_ID,
+        "client_secret": settings.STRAVA_CLIENT_SECRET,
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token
+    }
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, data=data)
+        
+    if response.status_code != 200:
+        print(f"Failed to refresh token: {response.text}")
+        return None
+        
+    new_tokens = response.json()
+    user_ref.update({
+        "access_token": new_tokens["access_token"],
+        "refresh_token": new_tokens["refresh_token"],
+        "expires_at": new_tokens["expires_at"]
+    })
+    
+    return new_tokens["access_token"]
+
 
 @router.post("/process-activity")
 async def process_activity(request: Request):
@@ -45,7 +87,10 @@ async def process_activity(request: Request):
         return Response(status_code=status.HTTP_200_OK)
         
     user_data = user_doc.to_dict()
-    access_token = user_data.get("access_token")
+    access_token = await get_valid_access_token(user_ref, user_data)
+    if not access_token:
+        return Response(status_code=status.HTTP_200_OK)
+        
     ftp = user_data.get("ftp", 200)
     max_hr = user_data.get("max_hr", 190)
     
@@ -98,10 +143,12 @@ async def process_activity(request: Request):
     })
     
     # Save the activity record for PMC graph
+    start_date = activity.get("start_date_local", activity.get("start_date"))
     activity_ref = user_ref.collection("activities").document(str(activity_id))
     activity_ref.set({
         "name": activity.get("name"),
         "date": today_str,
+        "start_date": start_date,
         "tss": round(tss, 1),
         "type": activity.get("type"),
         "moving_time": activity.get("moving_time", 0)

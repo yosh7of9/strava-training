@@ -112,6 +112,27 @@ async def initial_sync(request: Request):
         
         current_date += timedelta(days=1)
         
+    # Batch save individual activities
+    batch = db.batch()
+    for act in activities:
+        act_id = str(act["id"])
+        # Use start_date_local or start_date for sorting, e.g., "2024-03-21T14:30:00Z"
+        start_date = act.get("start_date_local", act.get("start_date"))
+        date_only = start_date[:10]
+        tss = calculate_tss(act, ftp, max_hr)
+        
+        act_ref = user_ref.collection("activities").document(act_id)
+        batch.set(act_ref, {
+            "name": act.get("name"),
+            "date": date_only,
+            "start_date": start_date, # Full ISO string for precise sorting
+            "tss": round(tss, 1),
+            "type": act.get("type"),
+            "moving_time": act.get("moving_time", 0)
+        })
+    
+    batch.commit()
+        
     # Save the calculated CTL/ATL to Firestore
     user_ref.update({
         "initial_ctl": round(ctl, 1),
