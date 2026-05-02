@@ -52,10 +52,18 @@ async def dashboard(request: Request):
         return RedirectResponse(url="/", status_code=303)
         
     user_data = user_doc.to_dict()
+    
+    # Fetch last activity
+    last_activity = None
+    activities_ref = db.collection("users").document(user_id).collection("activities")
+    activities = activities_ref.order_by("start_date", direction="DESCENDING").limit(1).get()
+    if activities:
+        last_activity = activities[0].to_dict()
         
     return templates.TemplateResponse(
         request=request, name="dashboard.html", context={
             "title": "My Dashboard", 
-            "user": user_data
+            "user": user_data,
+            "last_activity": last_activity
         }
     )

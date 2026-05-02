@@ -72,15 +72,20 @@
         <span class="text-3xl md:text-4xl font-extrabold text-orange-500">{{ user.initial_atl|default(0) }}</span>
     </div>
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
-        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2">FTP</span>
-        <span class="text-3xl md:text-4xl font-extrabold text-gray-800">{{ user.ftp }}</span>
+        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2 text-center">Last Activity TSS</span>
+        <span class="text-3xl md:text-4xl font-extrabold text-gray-800">
+            {{ last_activity.tss|default(0)|round(1) if last_activity else '—' }}
+        </span>
+        {% if last_activity %}
+        <span class="text-[10px] text-gray-400 mt-1 truncate max-w-full px-2">{{ last_activity.name }}</span>
+        {% endif %}
     </div>
 </div>
 
 
 <!-- PMC Chart -->
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-2 md:p-6 w-full mb-8">
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 px-2">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 px-2">
         <h2 class="text-lg font-bold text-gray-800 mb-2 sm:mb-0">Performance Management Chart</h2>
         <div class="flex space-x-2">
             <button onclick="updateChartRange(30)" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">1M</button>
@@ -90,6 +95,13 @@
             <button onclick="updateChartRange(0)" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">All</button>
         </div>
     </div>
+    
+    <!-- Manual Axis Labels above chart to avoid clipping on mobile -->
+    <div class="flex justify-between px-1 mb-1 text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-400">
+        <span class="flex items-center"><div class="w-2 h-2 rounded-full bg-blue-600 mr-1"></div> ATL / CTL</span>
+        <span class="flex items-center">TSB <div class="w-2 h-2 rounded-full bg-green-500 opacity-50 ml-1"></div></span>
+    </div>
+    
     <div class="relative w-full h-[300px] md:h-[500px]">
         <canvas id="pmcChart"></canvas>
     </div>
@@ -218,8 +230,7 @@
                         display: true,
                         position: 'left',
                         title: { 
-                            display: window.innerWidth >= 768, 
-                            text: 'TSS / Day' 
+                            display: false
                         },
                         min: 0,
                         ticks: {
@@ -232,8 +243,7 @@
                         display: true,
                         position: 'right',
                         title: { 
-                            display: window.innerWidth >= 768, 
-                            text: 'TSB' 
+                            display: false
                         },
                         grid: { drawOnChartArea: false },
                         ticks: {
@@ -246,16 +256,25 @@
         });
         
         // Fix for mobile tooltip sticking: 
-        // Clear active elements when clicking/touching outside the drawing area
-        if (window.innerWidth < 768) {
-            ctx.canvas.addEventListener('click', (e) => {
-                const activePoints = pmcChartInstance.getElementsAtEventForMode(e, 'index', { intersect: false }, true);
-                if (activePoints.length === 0) {
-                    pmcChartInstance.setActiveElements([]);
-                    pmcChartInstance.update();
-                }
-            });
-        }
+        // Clear active elements when clicking/touching anywhere on the document
+        // if the target is not the canvas itself.
+        const clearTooltip = (e) => {
+            if (pmcChartInstance && e.target !== ctx.canvas) {
+                pmcChartInstance.setActiveElements([]);
+                pmcChartInstance.update();
+            }
+        };
+        document.addEventListener('touchstart', clearTooltip);
+        document.addEventListener('mousedown', clearTooltip);
+
+        // Also clear if clicking on empty space in canvas
+        ctx.canvas.addEventListener('click', (e) => {
+            const activePoints = pmcChartInstance.getElementsAtEventForMode(e, 'index', { intersect: false }, true);
+            if (activePoints.length === 0) {
+                pmcChartInstance.setActiveElements([]);
+                pmcChartInstance.update();
+            }
+        });
     }
 
     async function loadData() {
