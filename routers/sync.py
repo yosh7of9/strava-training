@@ -1,0 +1,115 @@
+import httpx
+from datetime import datetime, timedelta, timezone
+from fastapi import APIRouter, Request, HTTPException, status
+from fastapi.responses import RedirectResponse
+from core.database import get_db
+
+router = APIRouter(prefix="/sync", tags=["sync"])
+
+def calculate_tss(activity, ftp, max_hr):
+    """
+    Estimate TSS based on power, suffer score, or heart rate.
+    """
+    # Try power-based TSS
+    power = activity.get("weighted_average_power") or activity.get("average_watts")
+    moving_time = activity.get("moving_time", 0) # in seconds
+    
+    if power and ftp and ftp > 0:
+        intensity_factor = power / ftp
+        tss = (moving_time * power * intensity_factor) / (ftp * 3600) * 100
+        return max(0, tss)
+    
+    # Try Suffer Score (Strava's hrTSS)
+    suffer_score = activity.get("suffer_score")
+    if suffer_score:
+        return suffer_score
+        
+    # Try average HR heuristic
+    avg_hr = activity.get("average_heartrate")
+    if avg_hr and max_hr and max_hr > 0:
+        hr_ratio = avg_hr / max_hr
+        # Very rough approximation
+        tss = (moving_time / 3600) * (hr_ratio * 100) * (hr_ratio * 1.2)
+        return max(0, tss)
+        
+    return 0
+
+@router.post("/initial")
+async def initial_sync(request: Request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return RedirectResponse(url="/", status_code=303)
+        
+    db = get_db()
+    user_ref = db.collection("users").document(user_id)
+    user_doc = user_ref.get()
+    
+    if not user_doc.exists:
+        return RedirectResponse(url="/auth/logout", status_code=303)
+        
+    user_data = user_doc.to_dict()
+    access_token = user_data.get("access_token")
+    ftp = user_data.get("ftp", 200)
+    max_hr = user_data.get("max_hr", 190)
+    
+    # We fetch activities for the last 60 days
+    # CTL is a 42-day average. If the user was blank for months and started 2 weeks ago,
+    # 60 days is perfect to capture the recent ramp up, starting from 0.
+    start_date = datetime.now(timezone.utc) - timedelta(days=60)
+    start_timestamp = int(start_date.timestamp())
+    
+    url = f"https://www.strava.com/api/v3/athlete/activities?after={start_timestamp}&per_page=100"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+        
+    if response.status_code == 401:
+        # Token expired. Clear session and force re-login
+        request.session.clear()
+        return RedirectResponse(url="/auth/login", status_code=303)
+        
+    activities = response.json()
+    
+    # Group activities by day (YYYY-MM-DD)
+    daily_tss = {}
+    for act in activities:
+        # Start date is in ISO 8601, e.g., "2024-03-21T14:30:00Z"
+        date_str = act.get("start_date_local", act.get("start_date"))[:10]
+        tss = calculate_tss(act, ftp, max_hr)
+        daily_tss[date_str] = daily_tss.get(date_str, 0) + tss
+        
+    # Calculate CTL and ATL from start_date to today
+    ctl = 0.0
+    atl = 0.0
+    
+    today = datetime.now(timezone.utc).date()
+    current_date = start_date.date()
+    
+    pmc_history = []
+    
+    while current_date <= today:
+        date_str = current_date.strftime("%Y-%m-%d")
+        tss_today = daily_tss.get(date_str, 0)
+        
+        ctl = ctl + (tss_today - ctl) / 42.0
+        atl = atl + (tss_today - atl) / 7.0
+        
+        pmc_history.append({
+            "date": date_str,
+            "ctl": round(ctl, 1),
+            "atl": round(atl, 1),
+            "tsb": round(ctl - atl, 1)
+        })
+        
+        current_date += timedelta(days=1)
+        
+    # Save the calculated CTL/ATL to Firestore
+    user_ref.update({
+        "initial_ctl": round(ctl, 1),
+        "initial_atl": round(atl, 1),
+        "last_sync_date": today.strftime("%Y-%m-%d"),
+        "pmc_history": pmc_history[-90:]  # Keep up to 90 days of history
+    })
+    
+    return RedirectResponse(url="/dashboard", status_code=303)

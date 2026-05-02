@@ -1,0 +1,3 @@
+# Put allowed Strava Athlete IDs here, one per line.
+# Example:
+# 12345678

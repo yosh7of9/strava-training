@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | Strava Training{% endblock %}
+
+{% block head %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block nav_items %}
+<div class="flex items-center space-x-2 md:space-x-4">
+    <span class="text-xs md:text-sm font-medium text-gray-700 hidden sm:block">Hi, {{ user.name }}</span>
+    {% if user.profile_image %}
+    <img src="{{ user.profile_image }}" alt="Profile" class="h-8 w-8 rounded-full border border-gray-300">
+    {% endif %}
+    <a href="/settings" class="text-gray-600 hover:text-strava px-2 md:px-3 py-2 rounded-md text-xs md:text-sm font-medium">Settings</a>
+    <a href="/auth/logout" class="text-gray-600 hover:text-strava px-2 md:px-3 py-2 rounded-md text-xs md:text-sm font-medium">Logout</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="mb-6 md:mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
+    <div>
+        <h1 class="text-2xl md:text-3xl font-bold text-gray-900">Training Dashboard</h1>
+        <p class="text-sm md:text-base text-gray-500 mt-1 md:mt-2">Your Training Stress Balance and Load metrics.</p>
+    </div>
+    
+    <form action="/sync/initial" method="POST" class="w-full sm:w-auto">
+        <button type="submit" class="w-full sm:w-auto bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-3 md:py-2 rounded-md font-medium text-sm transition-colors flex items-center justify-center shadow-sm">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            Sync Past Activities
+        </button>
+    </form>
+</div>
+
+<!-- Metrics Overview -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
+        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2">TSB (Form)</span>
+        <span class="text-3xl md:text-4xl font-extrabold {% if (user.initial_ctl|default(0) - user.initial_atl|default(0)) >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
+            {{ (user.initial_ctl|default(0) - user.initial_atl|default(0)) | round(1) }}
+        </span>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
+        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2">CTL (Fitness)</span>
+        <span class="text-3xl md:text-4xl font-extrabold text-blue-600">{{ user.initial_ctl|default(0) }}</span>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
+        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2">ATL (Fatigue)</span>
+        <span class="text-3xl md:text-4xl font-extrabold text-orange-500">{{ user.initial_atl|default(0) }}</span>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
+        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2">FTP</span>
+        <span class="text-3xl md:text-4xl font-extrabold text-gray-800">{{ user.ftp }}</span>
+    </div>
+</div>
+
+<!-- PMC Chart -->
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-2 md:p-6 w-full mb-8">
+    <h2 class="text-lg font-bold text-gray-800 mb-4 px-2">Performance Management Chart</h2>
+    <div class="relative w-full h-[300px] md:h-[500px]">
+        <canvas id="pmcChart"></canvas>
+    </div>
+</div>
+
+<script>
+    // Fetch PMC Data and Render Chart
+    async function renderChart() {
+        const response = await fetch('/api/pmc-data');
+        if (!response.ok) return;
+        const data = await response.json();
+        
+        const ctx = document.getElementById('pmcChart').getContext('2d');
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.dates,
+                datasets: [
+                    {
+                        label: 'TSB (Form)',
+                        data: data.tsb,
+                        type: 'bar',
+                        backgroundColor: (ctx) => {
+                            const val = ctx.raw;
+                            return val >= 0 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
+                        },
+                        yAxisID: 'y1',
+                        barPercentage: 1.0,
+                        categoryPercentage: 1.0
+                    },
+                    {
+                        label: 'CTL (Fitness)',
+                        data: data.ctl,
+                        borderColor: 'rgb(37, 99, 235)',
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        fill: true,
+                        pointRadius: 0,
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'ATL (Fatigue)',
+                        data: data.atl,
+                        borderColor: 'rgb(249, 115, 22)',
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        grid: { display: false },
+                        ticks: {
+                            maxTicksLimit: 15
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: 'TSS / Day' },
+                        min: 0
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: 'TSB' },
+                        grid: { drawOnChartArea: false }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: window.innerWidth < 768 ? 'bottom' : 'top',
+                    }
+                }
+            }
+        });
+    }
+    
+    renderChart();
+</script>
+{% endblock %}

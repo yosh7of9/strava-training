@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+allowed_users.txt
+.DS_Store
+node_modules/
