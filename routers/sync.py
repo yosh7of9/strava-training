@@ -95,10 +95,15 @@ async def initial_sync(request: Request):
     
     pmc_history = []
     
-    while current_date < today:
+    while current_date <= today:
         date_str = current_date.strftime("%Y-%m-%d")
         tss_today = daily_tss.get(date_str, 0)
         
+        # If it's today and no activity, don't update with TSS=0.
+        # This prevents premature decay before the actual workout is synced.
+        if current_date == today and tss_today == 0:
+            break
+            
         ctl = ctl + (tss_today - ctl) / 42.0
         atl = atl + (tss_today - atl) / 7.0
         
