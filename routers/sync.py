@@ -95,7 +95,7 @@ async def initial_sync(request: Request):
     
     pmc_history = []
     
-    while current_date <= today:
+    while current_date < today:
         date_str = current_date.strftime("%Y-%m-%d")
         tss_today = daily_tss.get(date_str, 0)
         
