@@ -28,7 +28,7 @@ def backfill():
         for entry in pmc_history:
             # We must create a new dict or modify carefully
             date_str = entry.get("date")
-            if not date_str or date_str < "2026-04-01":
+            if not date_str:
                 new_pmc_history.append(entry)
                 continue
             

@@ -15,9 +15,9 @@
     <img src="{{ user.profile_image }}" alt="Profile" class="h-8 w-8 rounded-full border border-gray-300 hidden sm:block">
     {% endif %}
     
-    <!-- Sync Button in Navbar -->
-    <form action="/sync/initial" method="POST" class="inline">
-        <button type="submit" class="text-gray-600 hover:text-strava px-2 py-2 rounded-md text-xs md:text-sm font-medium flex items-center" title="Sync Past Activities">
+    <!-- Sync Button in Navbar (Incremental Sync) -->
+    <form action="/sync/latest" method="POST" class="inline">
+        <button type="submit" class="text-gray-600 hover:text-strava px-2 py-2 rounded-md text-xs md:text-sm font-medium flex items-center" title="Sync Latest Activities">
             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             <span class="hidden md:inline">Sync</span>
         </button>
@@ -102,8 +102,14 @@
     
     <!-- Manual Axis Labels above chart to avoid clipping on mobile -->
     <div class="flex justify-between px-1 mb-1 text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-400">
-        <span class="flex items-center"><div class="w-2 h-2 rounded-full bg-blue-600 mr-1"></div> ATL / CTL</span>
-        <span class="flex items-center">TSB <div class="w-2 h-2 rounded-full bg-green-500 opacity-50 ml-1"></div></span>
+        <span class="flex items-center">
+            <div id="leftLabelColor" class="w-2 h-2 rounded-full bg-blue-600 mr-1"></div> 
+            <span id="leftLabelText">ATL / CTL</span>
+        </span>
+        <span class="flex items-center">
+            <span id="rightLabelText">TSB</span> 
+            <div id="rightLabelColor" class="w-2 h-2 rounded-full bg-green-500 opacity-50 ml-1"></div>
+        </span>
     </div>
     
     <div class="relative w-full h-[300px] md:h-[500px]">
@@ -139,15 +145,27 @@
         const btnPmc = document.getElementById('btnPmc');
         const btnIntensity = document.getElementById('btnIntensity');
         const chartTitle = document.getElementById('chartTitle');
+        const leftLabelText = document.getElementById('leftLabelText');
+        const leftLabelColor = document.getElementById('leftLabelColor');
+        const rightLabelText = document.getElementById('rightLabelText');
+        const rightLabelColor = document.getElementById('rightLabelColor');
         
         if (mode === 'pmc') {
             btnPmc.className = "px-3 py-1 text-xs font-bold rounded-md bg-white shadow-sm text-gray-800 transition-all";
             btnIntensity.className = "px-3 py-1 text-xs font-bold rounded-md text-gray-500 hover:text-gray-700 transition-all";
             chartTitle.innerText = 'Performance Management Chart';
+            leftLabelText.innerText = 'ATL / CTL';
+            leftLabelColor.className = "w-2 h-2 rounded-full bg-blue-600 mr-1";
+            rightLabelText.innerText = 'TSB';
+            rightLabelColor.className = "w-2 h-2 rounded-full bg-green-500 opacity-50 ml-1";
         } else {
             btnIntensity.className = "px-3 py-1 text-xs font-bold rounded-md bg-white shadow-sm text-gray-800 transition-all";
             btnPmc.className = "px-3 py-1 text-xs font-bold rounded-md text-gray-500 hover:text-gray-700 transition-all";
             chartTitle.innerText = 'Power Intensity Distribution';
+            leftLabelText.innerText = 'Power (Watts)';
+            leftLabelColor.className = "w-2 h-2 rounded-full bg-gray-400 mr-1";
+            rightLabelText.innerText = 'TSS';
+            rightLabelColor.className = "w-2 h-2 rounded-full bg-blue-600 ml-1";
         }
         
         if (fullData) renderChartData(filterData(fullData, currentDays));
@@ -180,9 +198,9 @@
                 label: 'Power 5%-95%',
                 data: boxData,
                 type: 'bar',
-                backgroundColor: 'rgba(255, 255, 255, 0.3)', // Higher transparency
-                borderColor: 'rgba(31, 41, 55, 0.8)',
-                borderWidth: 1,
+                backgroundColor: 'rgba(255, 255, 255, 0.5)', // Increased visibility
+                borderColor: 'rgba(31, 41, 55, 1)', // Solid dark border
+                borderWidth: 1.5, // Slightly thicker for visibility
                 borderSkipped: false,
                 barPercentage: 0.8,
                 categoryPercentage: 0.8,
@@ -322,7 +340,7 @@
         
         const datasets = currentMode === 'pmc' ? getPmcDatasets(dataToRender) : getIntensityDatasets(dataToRender);
         const annotations = getAnnotations(dataToRender);
-        const displayMax = annotations._displayMax;
+        const displayMax = annotations._displayMax || (dataToRender.ftp ? dataToRender.ftp * 1.5 : 400);
         delete annotations._displayMax;
 
         if (typeof ChartAnnotation !== 'undefined' && Chart.registry.plugins.get('annotation') === undefined) {
@@ -338,17 +356,29 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
+                layout: {
+                    padding: window.innerWidth < 768 ? { left: 0, right: 0, top: 10, bottom: 0 } : 10
+                },
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
                 plugins: {
                     annotation: {
-                        drawTime: 'beforeDatasetsDraw', // Ensure background is drawn first
+                        drawTime: 'beforeDraw',
                         annotations: annotations
                     },
                     legend: {
                         position: window.innerWidth < 768 ? 'bottom' : 'top',
-                        labels: { boxWidth: 12, font: { size: 10 } }
+                        labels: {
+                            boxWidth: window.innerWidth < 768 ? 12 : 40,
+                            padding: window.innerWidth < 768 ? 10 : 20,
+                            font: { size: window.innerWidth < 768 ? 10 : 12 }
+                        }
                     },
                     tooltip: {
+                        enabled: true,
+                        position: 'nearest',
                         callbacks: {
                             afterBody: function(context) {
                                 const i = context[0].dataIndex;
@@ -364,41 +394,52 @@
                 },
                 scales: {
                     x: {
+                        display: true,
                         grid: { display: false },
                         ticks: {
                             maxTicksLimit: window.innerWidth < 768 ? 8 : 15,
                             font: { size: window.innerWidth < 768 ? 10 : 12 },
+                            maxRotation: 0,
+                            minRotation: 0,
                             callback: function(val, index) {
                                 const dateStr = dataToRender.dates[index];
                                 if (!dateStr) return '';
                                 const parts = dateStr.split('-');
-                                const mmdd = `${parts[1]}/${parts[2]}`;
-                                const prevDateStr = index > 0 ? dataToRender.dates[index - 1] : null;
-                                const prevYear = prevDateStr ? prevDateStr.split('-')[0] : null;
-                                if (index === 0 || parts[0] !== prevYear) {
-                                    return [mmdd, parts[0]];
+                                if (window.innerWidth < 768) {
+                                    const mmdd = `${parts[1]}/${parts[2]}`;
+                                    const prevDateStr = index > 0 ? dataToRender.dates[index - 1] : null;
+                                    const prevYear = prevDateStr ? prevDateStr.split('-')[0] : null;
+                                    if (index === 0 || parts[0] !== prevYear) {
+                                        return [mmdd, parts[0]];
+                                    }
+                                    return mmdd;
                                 }
-                                return mmdd;
+                                return dateStr;
                             }
                         }
                     },
                     y: {
-                        id: 'y',
                         type: 'linear',
+                        display: true,
                         position: 'left',
-                        title: { display: true, text: currentMode === 'pmc' ? 'Fitness / Fatigue' : 'Power (Watts)' },
-                        beginAtZero: true,
-                        max: currentMode === 'intensity' ? displayMax : null,
-                        ticks: { font: { size: window.innerWidth < 768 ? 9 : 12 } }
+                        title: { display: false },
+                        min: 0,
+                        ...(currentMode === 'intensity' && displayMax ? { max: displayMax } : {}),
+                        ticks: {
+                            font: { size: window.innerWidth < 768 ? 9 : 12 },
+                            padding: window.innerWidth < 768 ? 2 : 10
+                        }
                     },
                     y1: {
-                        id: 'y1',
                         type: 'linear',
+                        display: true,
                         position: 'right',
-                        title: { display: true, text: currentMode === 'pmc' ? 'Form (TSB)' : 'TSS' },
+                        title: { display: false },
                         grid: { drawOnChartArea: false },
-                        beginAtZero: true,
-                        ticks: { font: { size: window.innerWidth < 768 ? 9 : 12 } }
+                        ticks: {
+                            font: { size: window.innerWidth < 768 ? 9 : 12 },
+                            padding: window.innerWidth < 768 ? 2 : 10
+                        }
                     }
                 }
             }

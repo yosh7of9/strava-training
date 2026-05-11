@@ -124,11 +124,15 @@ async def process_activity(request: Request):
     tss = calculate_tss(activity, ftp, max_hr)
     
     # Save/Update this specific activity in its sub-collection
+    start_date = activity.get("start_date_local", activity.get("start_date"))
     activity_ref = user_ref.collection("activities").document(str(activity_id))
     activity_ref.set({
         "name": activity.get("name"),
         "date": activity_date,
+        "start_date": start_date, # Full ISO string for precise sorting
         "tss": round(tss, 1),
+        "type": activity.get("type"),
+        "moving_time": activity.get("moving_time", 0),
         "watts_data": watts_data, # Store for re-calculation if needed
         "synced_at": datetime.now(timezone.utc).isoformat()
     })
@@ -151,8 +155,6 @@ async def process_activity(request: Request):
         p95 = float(np.percentile(filtered_watts, 95))
     
     # Update CTL/ATL based on total_tss_today
-    # To be mathematically correct for multiple updates on same day, 
-    # we need to start from the values at the end of YESTERDAY.
     pmc_history = user_data.get("pmc_history", [])
     
     prev_ctl = user_data.get("initial_ctl", 0.0)
@@ -165,13 +167,6 @@ async def process_activity(request: Request):
         if len(pmc_history) > 1:
             prev_ctl = pmc_history[-2]["ctl"]
             prev_atl = pmc_history[-2]["atl"]
-        else:
-            # If today is the first day ever, start from initial user settings
-            # We need to backtrack the first update. 
-            # new_ctl = current_ctl + (tss - current_ctl) / 42.0
-            # current_ctl = (new_ctl * 42 - tss) / 41
-            # But let's assume we have initial values in the user doc.
-            pass
 
     new_ctl = prev_ctl + (total_tss_today - prev_ctl) / 42.0
     new_atl = prev_atl + (total_tss_today - prev_atl) / 7.0
@@ -198,18 +193,6 @@ async def process_activity(request: Request):
         "initial_atl": round(new_atl, 1),
         "last_sync_date": activity_date,
         "pmc_history": pmc_history[-1095:]
-    })
-    
-    # Save the activity record for PMC graph
-    start_date = activity.get("start_date_local", activity.get("start_date"))
-    activity_ref = user_ref.collection("activities").document(str(activity_id))
-    activity_ref.set({
-        "name": activity.get("name"),
-        "date": today_str,
-        "start_date": start_date,
-        "tss": round(tss, 1),
-        "type": activity.get("type"),
-        "moving_time": activity.get("moving_time", 0)
     })
     
     return Response(status_code=status.HTTP_200_OK)
