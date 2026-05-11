@@ -206,6 +206,11 @@ async def sync_latest(request: Request):
     if not activities:
         return RedirectResponse(url="/dashboard", status_code=303)
 
+    # Strava returns activities newest-first, so activities[0] is the most recent.
+    # Always force-update the latest activity, as Strava may refine its data
+    # (power corrections, auto-pause adjustments) after the webhook first fires.
+    latest_act_id = str(activities[0]["id"])
+
     # Get existing activity IDs for the same period from Firestore to avoid redundant work
     existing_acts = user_ref.collection("activities").where("date", ">=", start_date.strftime("%Y-%m-%d")).get()
     existing_ids = {doc.id for doc in existing_acts}
@@ -216,8 +221,8 @@ async def sync_latest(request: Request):
     for act in activities:
         act_id = str(act["id"])
         
-        # SKIP if already exists and has TSS (we assume it's complete)
-        if act_id in existing_ids:
+        # Skip if already exists — EXCEPT for the latest activity which is always re-processed
+        if act_id in existing_ids and act_id != latest_act_id:
             continue
             
         start_date_iso = act.get("start_date_local", act.get("start_date"))
