@@ -85,7 +85,15 @@ async def initial_sync(request: Request):
         date_str = act.get("start_date_local", act.get("start_date"))[:10]
         tss = calculate_tss(act, ftp, max_hr)
         daily_tss[date_str] = daily_tss.get(date_str, 0) + tss
-        
+
+    # Build a lookup of existing pmc_history entries to preserve p5/p50/p95
+    existing_pmc = user_data.get("pmc_history", [])
+    existing_power_stats = {
+        e["date"]: {k: e[k] for k in ("p5", "p50", "p95") if k in e}
+        for e in existing_pmc
+        if e.get("p5") is not None
+    }
+
     # Calculate CTL and ATL from start_date to today
     ctl = 0.0
     atl = 0.0
@@ -106,14 +114,19 @@ async def initial_sync(request: Request):
             
         ctl = ctl + (tss_today - ctl) / 42.0
         atl = atl + (tss_today - atl) / 7.0
-        
-        pmc_history.append({
+
+        entry = {
             "date": date_str,
             "tss": round(tss_today, 1),
             "ctl": round(ctl, 1),
             "atl": round(atl, 1),
             "tsb": round(ctl - atl, 1)
-        })
+        }
+        # Preserve existing power distribution data if available
+        if date_str in existing_power_stats:
+            entry.update(existing_power_stats[date_str])
+
+        pmc_history.append(entry)
         
         current_date += timedelta(days=1)
         
