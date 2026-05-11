@@ -212,12 +212,12 @@
                 data: dataToRender.p50 ? dataToRender.p50.map(v => (v !== null && v !== undefined) ? v : null) : [],
                 type: 'line',
                 showLine: false,
-                backgroundColor: 'white',
+                backgroundColor: 'black',
                 borderColor: 'rgba(31, 41, 55, 1)',
                 borderWidth: 1,
                 pointStyle: 'rectRot',
-                pointRadius: 5,
-                pointHoverRadius: 7,
+                pointRadius: window.innerWidth < 768 ? 4 : 5,
+                pointHoverRadius: window.innerWidth < 768 ? 5 : 7,
                 yAxisID: 'y',
                 order: 0
             }
@@ -283,12 +283,12 @@
         const displayMax = Math.max(currentFtp * 1.4, maxP95 * 1.1);
 
         const zoneDefs = [
-            { label: 'Z1', min: 0, max: 0.55, color: 'rgba(243, 244, 246, 0.7)' },
-            { label: 'Z2', min: 0.55, max: 0.75, color: 'rgba(219, 234, 254, 0.7)' },
-            { label: 'Z3', min: 0.75, max: 0.90, color: 'rgba(220, 252, 231, 0.7)' },
-            { label: 'Z4', min: 0.90, max: 1.05, color: 'rgba(254, 249, 195, 0.7)' },
-            { label: 'Z5', min: 1.05, max: 1.20, color: 'rgba(255, 237, 213, 0.7)' },
-            { label: 'Z6', min: 1.20, max: 5.0, color: 'rgba(254, 226, 226, 0.7)' } // Max 5.0 for safety, but scale will cap it
+            { label: 'Z1', min: 0, max: 0.55, color: 'rgba(200, 200, 210, 0.85)' },
+            { label: 'Z2', min: 0.55, max: 0.75, color: 'rgba(147, 197, 253, 0.85)' },
+            { label: 'Z3', min: 0.75, max: 0.90, color: 'rgba(134, 239, 172, 0.85)' },
+            { label: 'Z4', min: 0.90, max: 1.05, color: 'rgba(253, 224, 71, 0.85)' },
+            { label: 'Z5', min: 1.05, max: 1.20, color: 'rgba(251, 146, 60, 0.85)' },
+            { label: 'Z6', min: 1.20, max: 5.0, color: 'rgba(248, 113, 113, 0.85)' }
         ];
 
         let segments = [];
@@ -360,8 +360,8 @@
                     padding: window.innerWidth < 768 ? { left: 0, right: 0, top: 10, bottom: 0 } : 10
                 },
                 interaction: {
-                    mode: 'index',
-                    intersect: false,
+                    mode: 'nearest',
+                    intersect: true,
                 },
                 plugins: {
                     annotation: {
