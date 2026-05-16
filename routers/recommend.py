@@ -225,16 +225,47 @@ async def get_today_recommendation(request: Request):
     
     adjusted_type, warning = adjust_for_tsb(scheduled_type, tsb)
     
+    # Calculate TSS allowance if TSB is low (<= -10)
+    tss_allowance = None
+    if tsb <= -10:
+        # Target TSB formula provided by user
+        # TSB_allow = -10 - 0.2 * Current_CTL + 0.3 * Current_TSB
+        target_tsb = -10 - (0.2 * current_ctl) + (0.3 * tsb)
+        
+        # Reverse calculation for TSS:
+        # TSB_after = TSB_now - 5/42 * TSS - CTL/42 + ATL/7 >= TSB_allow
+        # TSS <= (TSB_now - TSB_allow - CTL/42 + ATL/7) * 42/5
+        tss_limit = (tsb - target_tsb - (current_ctl / 42.0) + (current_atl / 7.0)) * 8.4
+        tss_allowance = max(0, round(tss_limit))
+        
+        allowance_msg = f"💡 今日のTSS許容上限は {tss_allowance} です。これを超える強度のトレーニングは控えましょう。"
+        if warning:
+            warning += f" {allowance_msg}"
+        else:
+            warning = allowance_msg
+
     raw_training_info = TRAINING_TYPES.get(adjusted_type, TRAINING_TYPES["Endurance"])
     # Convert % FTP to Watts for better UX
     training_info = format_training_with_ftp(raw_training_info, ftp)
     
+    # Adjust Duration for Endurance if TSB is low
+    if adjusted_type == "Endurance" and tss_allowance is not None:
+        # Intensity for Endurance is 60-75% FTP
+        # Duration (min) = (TSS * 60) / ( (Intensity/100)^2 * 100 )
+        min_dur = round((tss_allowance * 60) / 56.25) # at 75%
+        max_dur = round((tss_allowance * 60) / 36.0)  # at 60%
+        if min_dur > 0:
+            training_info["duration"] = f"{min_dur}–{max_dur} min (Max)"
+        else:
+            training_info["duration"] = "0 min (Rest recommended)"
+
     return {
         "day": today,
         "scheduled_type": scheduled_type,
         "adjusted_type": adjusted_type,
         "tsb": tsb,
         "warning": warning,
+        "tss_allowance": tss_allowance,
         "training": training_info,
         "ftp": ftp
     }
