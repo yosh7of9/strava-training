@@ -48,11 +48,19 @@ async def update_settings(
     db = get_db()
     user_ref = db.collection("users").document(user_id)
     
+    from datetime import datetime, timezone
+    user_data = user_ref.get().to_dict()
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    ftp_history = user_data.get("ftp_history", [])
+    if not ftp_history or ftp_history[-1]["ftp"] != ftp:
+        ftp_history.append({"date": today_str, "ftp": ftp})
+
     update_data = {
         "ftp": ftp,
         "max_hr": max_hr,
         "initial_ctl": initial_ctl,
         "initial_atl": initial_atl,
+        "ftp_history": ftp_history,
         "weekly_schedule": {
             "mon": schedule_mon,
             "tue": schedule_tue,

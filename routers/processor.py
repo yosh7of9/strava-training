@@ -1,6 +1,7 @@
 import base64
 import json
 import httpx
+import numpy as np
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, Response, status
 from core.database import get_db
@@ -107,51 +108,48 @@ async def process_activity(request: Request):
         return Response(status_code=status.HTTP_200_OK)
         
     activity = response.json()
+    activity_date = activity.get("start_date_local", activity.get("start_date"))[:10]
     
-    # Calculate TSS
+    # Fetch Power Streams for Distribution
+    url_streams = f"https://www.strava.com/api/v3/activities/{activity_id}/streams?keys=watts&key_by_type=true"
+    watts_data = []
+    async with httpx.AsyncClient() as client:
+        resp_streams = await client.get(url_streams, headers=headers)
+        if resp_streams.status_code == 200:
+            streams = resp_streams.json()
+            if "watts" in streams:
+                watts_data = streams["watts"]["data"]
+    
+    # Calculate current activity TSS
     tss = calculate_tss(activity, ftp, max_hr)
     
-    # Update CTL and ATL using EWMA
-    current_ctl = user_data.get("initial_ctl", 0.0)
-    current_atl = user_data.get("initial_atl", 0.0)
-    
-    new_ctl = current_ctl + (tss - current_ctl) / 42.0
-    new_atl = current_atl + (tss - current_atl) / 7.0
-    
-    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    
-    pmc_history = user_data.get("pmc_history", [])
-    # Add new entry or update today's entry
-    new_entry = {
-        "date": today_str,
-        "tss": round(tss, 1),
-        "ctl": round(new_ctl, 1),
-        "atl": round(new_atl, 1),
-        "tsb": round(new_ctl - new_atl, 1)
-    }
-    if pmc_history and pmc_history[-1]["date"] == today_str:
-        pmc_history[-1] = new_entry
-    else:
-        pmc_history.append(new_entry)
-    
-    # Update user document with new CTL/ATL
-    user_ref.update({
-        "initial_ctl": round(new_ctl, 1),
-        "initial_atl": round(new_atl, 1),
-        "last_sync_date": today_str,
-        "pmc_history": pmc_history[-1095:] # Keep last 1095 days (3 years)
-    })
-    
-    # Save the activity record for PMC graph
+    # Save/Update this specific activity in its sub-collection
     start_date = activity.get("start_date_local", activity.get("start_date"))
     activity_ref = user_ref.collection("activities").document(str(activity_id))
     activity_ref.set({
         "name": activity.get("name"),
-        "date": today_str,
-        "start_date": start_date,
+        "date": activity_date,
+        "start_date": start_date, # Full ISO string for precise sorting
         "tss": round(tss, 1),
         "type": activity.get("type"),
-        "moving_time": activity.get("moving_time", 0)
+        "moving_time": activity.get("moving_time", 0),
+        "watts_data": watts_data, # Store for re-calculation if needed
+        "synced_at": datetime.now(timezone.utc).isoformat()
     })
+    
+    # Aggregate all activities for the same day
+    all_acts_today = user_ref.collection("activities").where("date", "==", activity_date).get()
+    total_tss_today = 0
+    combined_watts = []
+    for act_doc in all_acts_today:
+        data = act_doc.to_dict()
+        total_tss_today += data.get("tss", 0)
+        combined_watts.extend(data.get("watts_data", []))
+    
+    # We now use the robust sync_pmc_data function to handle gap filling
+    # and recalculate up to the date of the new activity.
+    from routers.sync import sync_pmc_data
+    target_date = datetime.strptime(activity_date, "%Y-%m-%d").date()
+    await sync_pmc_data(user_ref, user_data, target_date)
     
     return Response(status_code=status.HTTP_200_OK)

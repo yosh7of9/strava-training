@@ -53,12 +53,39 @@ async def dashboard(request: Request):
         
     user_data = user_doc.to_dict()
     
-    # Fetch last activity
+    # Fetch Today's or Yesterday's activities (JST)
+    from datetime import datetime, timedelta, timezone
+    jst = timezone(timedelta(hours=9))
+    now_jst = datetime.now(jst)
+    today_str = now_jst.strftime("%Y-%m-%d")
+    yesterday_str = (now_jst - timedelta(days=1)).strftime("%Y-%m-%d")
+    
     last_activity = None
     activities_ref = db.collection("users").document(user_id).collection("activities")
-    activities = activities_ref.order_by("start_date", direction="DESCENDING").limit(1).get()
-    if activities:
-        last_activity = activities[0].to_dict()
+    
+    # Try Today first
+    today_acts = activities_ref.where("date", "==", today_str).get()
+    target_acts = today_acts
+    target_date_label = "Today"
+    
+    # If no activity today, try Yesterday
+    if not today_acts:
+        yesterday_acts = activities_ref.where("date", "==", yesterday_str).get()
+        target_acts = yesterday_acts
+        target_date_label = "Yesterday"
+    
+    if target_acts:
+        total_tss = 0
+        names = []
+        for act in target_acts:
+            d = act.to_dict()
+            total_tss += d.get("tss", 0)
+            names.append(d.get("name", "Activity"))
+        
+        last_activity = {
+            "tss": total_tss,
+            "name": f"[{target_date_label}] " + ", ".join(names)
+        }
         
     return templates.TemplateResponse(
         request=request, name="dashboard.html", context={

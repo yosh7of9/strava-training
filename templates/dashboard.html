@@ -5,6 +5,7 @@
 {% block head %}
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
 {% endblock %}
 
 {% block nav_items %}
@@ -14,9 +15,9 @@
     <img src="{{ user.profile_image }}" alt="Profile" class="h-8 w-8 rounded-full border border-gray-300 hidden sm:block">
     {% endif %}
     
-    <!-- Sync Button in Navbar -->
-    <form action="/sync/initial" method="POST" class="inline">
-        <button type="submit" class="text-gray-600 hover:text-strava px-2 py-2 rounded-md text-xs md:text-sm font-medium flex items-center" title="Sync Past Activities">
+    <!-- Sync Button in Navbar (Incremental Sync) -->
+    <form action="/sync/latest" method="POST" class="inline">
+        <button type="submit" class="text-gray-600 hover:text-strava px-2 py-2 rounded-md text-xs md:text-sm font-medium flex items-center" title="Sync Latest Activities">
             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             <span class="hidden md:inline">Sync</span>
         </button>
@@ -69,7 +70,7 @@
         <span class="text-3xl md:text-4xl font-extrabold text-orange-500">{{ user.initial_atl|default(0) }}</span>
     </div>
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
-        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2 text-center">Last Activity TSS</span>
+        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2 text-center">Recent Training TSS</span>
         <span class="text-3xl md:text-4xl font-extrabold text-gray-800">
             {{ last_activity.tss|default(0)|round(1) if last_activity else '—' }}
         </span>
@@ -83,20 +84,32 @@
 <!-- PMC Chart -->
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-2 md:p-6 w-full mb-8">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 px-2">
-        <h2 class="text-lg font-bold text-gray-800 mb-2 sm:mb-0">Performance Management Chart</h2>
-        <div class="flex space-x-2">
-            <button onclick="updateChartRange(30)" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">1M</button>
-            <button onclick="updateChartRange(90)" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-800 text-white hover:bg-gray-700 transition-colors">3M</button>
-            <button onclick="updateChartRange(180)" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">6M</button>
-            <button onclick="updateChartRange(365)" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">1Y</button>
-            <button onclick="updateChartRange(0)" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">All</button>
+        <div class="flex items-center space-x-4">
+            <h2 id="chartTitle" class="text-lg font-bold text-gray-800 mb-2 sm:mb-0">Performance Management Chart</h2>
+            <div class="flex bg-gray-100 p-1 rounded-lg">
+                <button onclick="setChartMode('pmc')" id="btnPmc" class="px-3 py-1 text-xs font-bold rounded-md bg-white shadow-sm text-gray-800 transition-all">PMC</button>
+                <button onclick="setChartMode('intensity')" id="btnIntensity" class="px-3 py-1 text-xs font-bold rounded-md text-gray-500 hover:text-gray-700 transition-all">Intensity</button>
+            </div>
+        </div>
+        <div class="flex space-x-2 mt-4 sm:mt-0">
+            <button onclick="updateChartRange(30)" id="range30" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">1M</button>
+            <button onclick="updateChartRange(90)" id="range90" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-800 text-white hover:bg-gray-700 transition-colors">3M</button>
+            <button onclick="updateChartRange(180)" id="range180" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">6M</button>
+            <button onclick="updateChartRange(365)" id="range365" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">1Y</button>
+            <button onclick="updateChartRange(0)" id="range0" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">All</button>
         </div>
     </div>
     
     <!-- Manual Axis Labels above chart to avoid clipping on mobile -->
     <div class="flex justify-between px-1 mb-1 text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-400">
-        <span class="flex items-center"><div class="w-2 h-2 rounded-full bg-blue-600 mr-1"></div> ATL / CTL</span>
-        <span class="flex items-center">TSB <div class="w-2 h-2 rounded-full bg-green-500 opacity-50 ml-1"></div></span>
+        <span class="flex items-center">
+            <div id="leftLabelColor" class="w-2 h-2 rounded-full bg-blue-600 mr-1"></div> 
+            <span id="leftLabelText">ATL / CTL</span>
+        </span>
+        <span class="flex items-center">
+            <span id="rightLabelText">TSB</span> 
+            <div id="rightLabelColor" class="w-2 h-2 rounded-full bg-green-500 opacity-50 ml-1"></div>
+        </span>
     </div>
     
     <div class="relative w-full h-[300px] md:h-[500px]">
@@ -110,83 +123,250 @@
 
     function filterData(data, days) {
         if (!days || days <= 0 || data.dates.length <= days) return data;
-        
         const startIdx = data.dates.length - days;
         return {
+            ...data,
             dates: data.dates.slice(startIdx),
             daily_tss: data.daily_tss.slice(startIdx),
             ctl: data.ctl.slice(startIdx),
             atl: data.atl.slice(startIdx),
-            tsb: data.tsb.slice(startIdx)
+            tsb: data.tsb.slice(startIdx),
+            p5: data.p5 ? data.p5.slice(startIdx) : [],
+            p50: data.p50 ? data.p50.slice(startIdx) : [],
+            p95: data.p95 ? data.p95.slice(startIdx) : []
         };
+    }
+
+    let currentMode = 'pmc';
+    let currentDays = 30;
+
+    function setChartMode(mode) {
+        currentMode = mode;
+        const btnPmc = document.getElementById('btnPmc');
+        const btnIntensity = document.getElementById('btnIntensity');
+        const chartTitle = document.getElementById('chartTitle');
+        const leftLabelText = document.getElementById('leftLabelText');
+        const leftLabelColor = document.getElementById('leftLabelColor');
+        const rightLabelText = document.getElementById('rightLabelText');
+        const rightLabelColor = document.getElementById('rightLabelColor');
+        
+        if (mode === 'pmc') {
+            btnPmc.className = "px-3 py-1 text-xs font-bold rounded-md bg-white shadow-sm text-gray-800 transition-all";
+            btnIntensity.className = "px-3 py-1 text-xs font-bold rounded-md text-gray-500 hover:text-gray-700 transition-all";
+            chartTitle.innerText = 'Performance Management Chart';
+            leftLabelText.innerText = 'ATL / CTL';
+            leftLabelColor.className = "w-2 h-2 rounded-full bg-blue-600 mr-1";
+            rightLabelText.innerText = 'TSB';
+            rightLabelColor.className = "w-2 h-2 rounded-full bg-green-500 opacity-50 ml-1";
+        } else {
+            btnIntensity.className = "px-3 py-1 text-xs font-bold rounded-md bg-white shadow-sm text-gray-800 transition-all";
+            btnPmc.className = "px-3 py-1 text-xs font-bold rounded-md text-gray-500 hover:text-gray-700 transition-all";
+            chartTitle.innerText = 'Power Intensity Distribution';
+            leftLabelText.innerText = 'Power (Watts)';
+            leftLabelColor.className = "w-2 h-2 rounded-full bg-gray-400 mr-1";
+            rightLabelText.innerText = 'TSS';
+            rightLabelColor.className = "w-2 h-2 rounded-full bg-blue-600 ml-1";
+        }
+        
+        if (fullData) renderChartData(filterData(fullData, currentDays));
+    }
+
+    function getIntensityDatasets(dataToRender) {
+        const boxData = dataToRender.dates.map((d, i) => {
+            const low = dataToRender.p5 ? dataToRender.p5[i] : null;
+            const high = dataToRender.p95 ? dataToRender.p95[i] : null;
+            if (low !== null && low !== undefined && high !== null && high !== undefined) {
+                return [low, high];
+            }
+            return null;
+        });
+
+        return [
+            {
+                label: 'TSS',
+                data: dataToRender.daily_tss.map(v => (v !== null && v > 0) ? v : null),
+                type: 'line',
+                borderColor: 'rgb(37, 99, 235)',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                pointRadius: 3,
+                tension: 0.2,
+                yAxisID: 'y1',
+                order: 1
+            },
+            {
+                label: 'Power 5%-95%',
+                data: boxData,
+                type: 'bar',
+                backgroundColor: 'rgba(255, 255, 255, 0.5)', // Increased visibility
+                borderColor: 'rgba(31, 41, 55, 1)', // Solid dark border
+                borderWidth: 1.5, // Slightly thicker for visibility
+                borderSkipped: false,
+                barPercentage: 0.8,
+                categoryPercentage: 0.8,
+                yAxisID: 'y',
+                order: 2
+            },
+            {
+                label: 'Median (p50)',
+                data: dataToRender.p50 ? dataToRender.p50.map(v => (v !== null && v !== undefined) ? v : null) : [],
+                type: 'line',
+                showLine: false,
+                backgroundColor: 'black',
+                borderColor: 'rgba(31, 41, 55, 1)',
+                borderWidth: 1,
+                pointStyle: 'rectRot',
+                pointRadius: window.innerWidth < 768 ? 4 : 5,
+                pointHoverRadius: window.innerWidth < 768 ? 5 : 7,
+                yAxisID: 'y',
+                order: 0
+            }
+        ];
+    }
+
+    function getPmcDatasets(dataToRender) {
+        return [
+            {
+                label: 'TSB (Form)',
+                data: dataToRender.tsb,
+                type: 'bar',
+                backgroundColor: (ctx) => {
+                    const val = ctx.raw;
+                    return val >= 0 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
+                },
+                yAxisID: 'y1',
+                barPercentage: 1.0,
+                categoryPercentage: 1.0
+            },
+            {
+                label: 'CTL (Fitness)',
+                data: dataToRender.ctl,
+                borderColor: 'rgb(37, 99, 235)',
+                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                fill: true,
+                pointRadius: 0,
+                tension: 0.4,
+                yAxisID: 'y'
+            },
+            {
+                label: 'ATL (Fatigue)',
+                data: dataToRender.atl,
+                borderColor: 'rgb(249, 115, 22)',
+                borderDash: [5, 5],
+                pointRadius: 0,
+                tension: 0.4,
+                yAxisID: 'y'
+            }
+        ];
+    }
+
+    function getAnnotations(dataToRender) {
+        if (currentMode !== 'intensity' || !dataToRender.ftp) return {};
+        const history = dataToRender.ftp_history || [];
+        const chartDates = dataToRender.dates;
+        const annotations = {};
+        
+        function getFtpForDate(d) {
+            let current = dataToRender.ftp;
+            for (let i = history.length - 1; i >= 0; i--) {
+                if (d >= history[i].date) return history[i].ftp;
+            }
+            return current;
+        }
+
+        // Calculate a reasonable max for the Y axis based on data
+        const maxP95 = dataToRender.p95 && dataToRender.p95.length > 0 
+            ? Math.max(...dataToRender.p95.filter(v => v !== null && v !== undefined), 0)
+            : 0;
+        const currentFtp = dataToRender.ftp;
+        // Ensure the scale is at least 140% of FTP to show some Z6, or 110% of max observed power
+        const displayMax = Math.max(currentFtp * 1.4, maxP95 * 1.1);
+
+        const zoneDefs = [
+            { label: 'Z1', min: 0, max: 0.55, color: 'rgba(200, 200, 210, 0.85)' },
+            { label: 'Z2', min: 0.55, max: 0.75, color: 'rgba(147, 197, 253, 0.85)' },
+            { label: 'Z3', min: 0.75, max: 0.90, color: 'rgba(134, 239, 172, 0.85)' },
+            { label: 'Z4', min: 0.90, max: 1.05, color: 'rgba(253, 224, 71, 0.85)' },
+            { label: 'Z5', min: 1.05, max: 1.20, color: 'rgba(251, 146, 60, 0.85)' },
+            { label: 'Z6', min: 1.20, max: 5.0, color: 'rgba(248, 113, 113, 0.85)' }
+        ];
+
+        let segments = [];
+        let currentSeg = null;
+        chartDates.forEach((d, i) => {
+            const f = getFtpForDate(d);
+            if (!currentSeg || currentSeg.ftp !== f) {
+                if (currentSeg) currentSeg.endIdx = i - 1;
+                currentSeg = { ftp: f, startIdx: i, endIdx: i };
+                segments.push(currentSeg);
+            } else currentSeg.endIdx = i;
+        });
+
+        segments.forEach((seg, sIdx) => {
+            zoneDefs.forEach((z, zIdx) => {
+                annotations[`seg${sIdx}zone${zIdx}`] = {
+                    type: 'box',
+                    drawTime: 'beforeDraw', // Crucial: ensure this is drawn first
+                    xMin: seg.startIdx - 0.5,
+                    xMax: seg.endIdx + 0.5,
+                    yMin: z.min * seg.ftp,
+                    yMax: z.max * seg.ftp,
+                    backgroundColor: z.color,
+                    borderWidth: 0,
+                    zIndex: -1,
+                    label: {
+                        display: sIdx === 0, // Only show label on the first segment to avoid clutter
+                        content: z.label,
+                        position: { x: 'start', y: 'start' },
+                        font: { size: 9, weight: 'bold' },
+                        color: 'rgba(0, 0, 0, 0.3)',
+                        padding: 2
+                    }
+                };
+            });
+        });
+        
+        // Store displayMax in annotations as a trick to access it in renderChartData
+        annotations._displayMax = displayMax;
+        return annotations;
     }
 
     function renderChartData(dataToRender) {
         const ctx = document.getElementById('pmcChart').getContext('2d');
-        
         if (pmcChartInstance) {
             pmcChartInstance.destroy();
+            pmcChartInstance = null;
         }
         
+        const datasets = currentMode === 'pmc' ? getPmcDatasets(dataToRender) : getIntensityDatasets(dataToRender);
+        const annotations = getAnnotations(dataToRender);
+        const displayMax = annotations._displayMax || (dataToRender.ftp ? dataToRender.ftp * 1.5 : 400);
+        delete annotations._displayMax;
+
+        if (typeof ChartAnnotation !== 'undefined' && Chart.registry.plugins.get('annotation') === undefined) {
+            Chart.register(ChartAnnotation);
+        }
+
         pmcChartInstance = new Chart(ctx, {
-            type: 'line',
+            type: currentMode === 'pmc' ? 'line' : 'bar',
             data: {
                 labels: dataToRender.dates,
-                datasets: [
-                    {
-                        label: 'TSB (Form)',
-                        data: dataToRender.tsb,
-                        type: 'bar',
-                        backgroundColor: (ctx) => {
-                            const val = ctx.raw;
-                            return val >= 0 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)';
-                        },
-                        yAxisID: 'y1',
-                        barPercentage: 1.0,
-                        categoryPercentage: 1.0
-                    },
-                    {
-                        label: 'CTL (Fitness)',
-                        data: dataToRender.ctl,
-                        borderColor: 'rgb(37, 99, 235)',
-                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                        fill: true,
-                        pointRadius: 0,
-                        tension: 0.4,
-                        yAxisID: 'y'
-                    },
-                    {
-                        label: 'ATL (Fatigue)',
-                        data: dataToRender.atl,
-                        borderColor: 'rgb(249, 115, 22)',
-                        borderDash: [5, 5],
-                        pointRadius: 0,
-                        tension: 0.4,
-                        yAxisID: 'y'
-                    }
-                ]
+                datasets: datasets
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 layout: {
-                    padding: window.innerWidth < 768 ? { left: -5, right: 0, top: 10, bottom: 0 } : 10
+                    padding: window.innerWidth < 768 ? { left: 0, right: 0, top: 10, bottom: 0 } : 10
                 },
                 interaction: {
-                    mode: 'index',
-                    intersect: false,
+                    mode: 'nearest',
+                    intersect: true,
                 },
                 plugins: {
-                    tooltip: {
-                        enabled: true,
-                        position: 'nearest',
-                        callbacks: {
-                            afterBody: function(context) {
-                                const dataIndex = context[0].dataIndex;
-                                const dailyTss = dataToRender.daily_tss[dataIndex];
-                                return `\nDaily TSS: ${dailyTss}`;
-                            }
-                        }
+                    annotation: {
+                        drawTime: 'beforeDatasetsDraw',
+                        annotations: annotations
                     },
                     legend: {
                         position: window.innerWidth < 768 ? 'bottom' : 'top',
@@ -194,6 +374,21 @@
                             boxWidth: window.innerWidth < 768 ? 12 : 40,
                             padding: window.innerWidth < 768 ? 10 : 20,
                             font: { size: window.innerWidth < 768 ? 10 : 12 }
+                        }
+                    },
+                    tooltip: {
+                        enabled: true,
+                        position: 'nearest',
+                        callbacks: {
+                            afterBody: function(context) {
+                                const i = context[0].dataIndex;
+                                let text = `\nDaily TSS: ${dataToRender.daily_tss[i]}`;
+                                if (currentMode === 'intensity' && dataToRender.p50[i]) {
+                                    text += `\np5-p95: ${dataToRender.p5[i]} - ${dataToRender.p95[i]}W`;
+                                    text += `\nMedian: ${dataToRender.p50[i]}W`;
+                                }
+                                return text;
+                            }
                         }
                     }
                 },
@@ -204,13 +399,14 @@
                         ticks: {
                             maxTicksLimit: window.innerWidth < 768 ? 8 : 15,
                             font: { size: window.innerWidth < 768 ? 10 : 12 },
+                            maxRotation: 0,
+                            minRotation: 0,
                             callback: function(val, index) {
                                 const dateStr = dataToRender.dates[index];
                                 if (!dateStr) return '';
                                 const parts = dateStr.split('-');
                                 if (window.innerWidth < 768) {
                                     const mmdd = `${parts[1]}/${parts[2]}`;
-                                    // Show year on the first tick or when the year changes
                                     const prevDateStr = index > 0 ? dataToRender.dates[index - 1] : null;
                                     const prevYear = prevDateStr ? prevDateStr.split('-')[0] : null;
                                     if (index === 0 || parts[0] !== prevYear) {
@@ -226,10 +422,9 @@
                         type: 'linear',
                         display: true,
                         position: 'left',
-                        title: { 
-                            display: false
-                        },
+                        title: { display: false },
                         min: 0,
+                        ...(currentMode === 'intensity' && displayMax ? { max: displayMax } : {}),
                         ticks: {
                             font: { size: window.innerWidth < 768 ? 9 : 12 },
                             padding: window.innerWidth < 768 ? 2 : 10
@@ -239,9 +434,7 @@
                         type: 'linear',
                         display: true,
                         position: 'right',
-                        title: { 
-                            display: false
-                        },
+                        title: { display: false },
                         grid: { drawOnChartArea: false },
                         ticks: {
                             font: { size: window.innerWidth < 768 ? 9 : 12 },
@@ -251,10 +444,8 @@
                 }
             }
         });
-        
-        // Fix for mobile tooltip sticking: 
-        // Clear active elements when clicking/touching anywhere on the document
-        // if the target is not the canvas itself.
+
+        // Fix for mobile tooltip sticking
         const clearTooltip = (e) => {
             if (pmcChartInstance && e.target !== ctx.canvas) {
                 pmcChartInstance.setActiveElements([]);
@@ -264,7 +455,6 @@
         document.addEventListener('touchstart', clearTooltip);
         document.addEventListener('mousedown', clearTooltip);
 
-        // Also clear if clicking on empty space in canvas
         ctx.canvas.addEventListener('click', (e) => {
             const activePoints = pmcChartInstance.getElementsAtEventForMode(e, 'index', { intersect: false }, true);
             if (activePoints.length === 0) {
@@ -274,19 +464,15 @@
         });
     }
 
-    async function loadData() {
+    async function fetchChartData() {
         const response = await fetch('/api/pmc-data');
         if (!response.ok) return;
         fullData = await response.json();
-        
-        // Default to 30 days (1M) view
-        updateChartRange(30);
+        updateChartRange(currentDays);
     }
     
     function updateChartRange(days) {
-        if (!fullData) return;
-        
-        // Update button styles
+        currentDays = days;
         const buttons = document.querySelectorAll('button[onclick^="updateChartRange"]');
         buttons.forEach(btn => {
             if (btn.getAttribute('onclick') === `updateChartRange(${days})`) {
@@ -295,12 +481,11 @@
                 btn.className = "px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors";
             }
         });
-
-        const filtered = filterData(fullData, days);
-        renderChartData(filtered);
+        
+        if (fullData) renderChartData(filterData(fullData, days));
     }
     
-    loadData();
+    fetchChartData();
 
     // Load today's recommendation
     async function loadRecommendation() {
