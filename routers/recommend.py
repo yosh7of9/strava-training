@@ -8,75 +8,75 @@ router = APIRouter(prefix="/recommend", tags=["recommend"])
 # Training type definitions for FTP improvement
 TRAINING_TYPES = {
     "Rest": {
-        "label": "Rest Day",
+        "label": "レスト（休息）",
         "emoji": "😴",
         "color": "gray",
-        "description": "Today is a rest day. Focus on recovery, sleep, and nutrition.",
-        "details": "No training needed. Light walking or stretching is fine.",
+        "description": "今日は休息日です。睡眠と栄養をしっかり摂り、回復に専念しましょう。",
+        "details": "トレーニングは不要です。軽いウォーキングやストレッチ程度に留めてください。",
         "duration": "—",
         "intensity": "—",
     },
     "Recovery": {
-        "label": "Active Recovery",
+        "label": "リカバリー（回復走）",
         "emoji": "🚶",
         "color": "green",
-        "description": "Easy spin to promote blood flow and recovery.",
-        "details": "Keep heart rate very low. Ride at 50-60% FTP. Do NOT push harder even if it feels easy.",
-        "duration": "30–45 min",
+        "description": "血流を促進し、疲労を抜くための非常に軽いライドです。",
+        "details": "心拍数を上げすぎないように。強度は 50-60% FTP を維持してください。物足りなく感じても、決して踏み込みすぎないでください。",
+        "duration": "30–45 分",
         "intensity": "< 60% FTP",
     },
     "Endurance": {
-        "label": "Endurance",
+        "label": "エンデュランス（有酸素）",
         "emoji": "🚴",
         "color": "blue",
-        "description": "Aerobic base building at a comfortable, conversational pace.",
-        "details": "Maintain 60–75% FTP. You should be able to hold a conversation. Great for fat metabolism and aerobic engine.",
-        "duration": "60–90 min",
+        "description": "有酸素能力の土台を作る、会話ができる程度の強度です。",
+        "details": "60–75% FTP を維持します。脂肪燃焼効率を高め、スタミナを強化するのに最適です。",
+        "duration": "60–90 分",
         "intensity": "60–75% FTP",
     },
     "Tempo": {
-        "label": "Tempo",
+        "label": "テンポ",
         "emoji": "⚡",
         "color": "yellow",
-        "description": "Sustained effort just below lactate threshold.",
-        "details": "Hold 76–87% FTP for 20–40 minutes continuously. Challenging but sustainable. Builds lactate clearance.",
-        "duration": "60 min (20–40 min @ Tempo)",
+        "description": "乳酸閾値の少し下、持久力とパワーを両立させる強度です。",
+        "details": "76–87% FTP を 20–40 分間継続します。ややきついですが、一定時間維持できるペースです。乳酸除去能力を高めます。",
+        "duration": "60 分 (20–40 分 @ Tempo)",
         "intensity": "76–87% FTP",
     },
     "SST": {
-        "label": "Sweet Spot Training",
+        "label": "Sweet Spot Training (SST)",
         "emoji": "🎯",
         "color": "orange",
-        "description": "The most efficient zone for FTP improvement.",
-        "details": "Target 88–93% FTP. Do 2×20 min or 3×15 min with 5 min rest between. This is your primary FTP builder.",
-        "duration": "60–75 min (2×20 min blocks)",
+        "description": "FTP向上に最も効率的と言われる、王道のトレーニングです。",
+        "details": "88–93% FTP をターゲットにします。2×20 分、または 3×15 分（セット間レスト 5 分）が基本構成です。",
+        "duration": "60–75 分 (2×20 分ブロック)",
         "intensity": "88–93% FTP",
     },
     "Threshold": {
-        "label": "Threshold",
+        "label": "閾値（Threshold）",
         "emoji": "🔥",
         "color": "red",
-        "description": "Training at or near your FTP. Directly raises your threshold.",
-        "details": "Hold 95–105% FTP. Do 2×15 min or 1×30 min. Very demanding — only do this when well-rested.",
-        "duration": "60 min (2×15 min blocks)",
+        "description": "FTP付近でのトレーニングです。閾値そのものを直接引き上げます。",
+        "details": "95–105% FTP で維持します。2×15 分、または 1×30 分を行います。非常に負荷が高いので、十分に回復した状態で行ってください。",
+        "duration": "60 分 (2×15 分ブロック)",
         "intensity": "95–105% FTP",
     },
     "VO2max": {
-        "label": "VO2max Intervals",
+        "label": "VO2max（最大酸素摂取量）",
         "emoji": "💥",
         "color": "purple",
-        "description": "Short, very hard intervals to raise your aerobic ceiling.",
-        "details": "Do 5×4 min @ 106–120% FTP with 4 min easy recovery. Or 8×3 min with 3 min recovery. Painful but powerful.",
-        "duration": "45–60 min (5×4 min intervals)",
+        "description": "有酸素能力の天井を引き上げる、短時間・高強度のインターバルです。",
+        "details": "106–120% FTP で 5×4 分（セット間レスト 4 分）を行います。非常に苦しいですが、効果は絶大です。",
+        "duration": "45–60 分 (5×4 分インターバル)",
         "intensity": "106–120% FTP",
     },
     "Long Endurance": {
-        "label": "Long Endurance Ride",
+        "label": "ロングライド",
         "emoji": "🗺️",
         "color": "teal",
-        "description": "Long aerobic ride to build your aerobic base and fat metabolism.",
-        "details": "Ride at 60–75% FTP for an extended period. No need to push hard. Focus on consistency and time in the saddle.",
-        "duration": "2–4 hours",
+        "description": "長時間走行により、有酸素ベースと脂質代謝能力を徹底的に鍛えます。",
+        "details": "60–75% FTP で長時間走り続けます。強度は上げすぎず、一貫性とサドルの上での時間を重視してください。",
+        "duration": "2–4 時間",
         "intensity": "60–75% FTP",
     },
 }
@@ -94,21 +94,21 @@ def adjust_for_tsb(training_type: str, tsb: float) -> tuple[str, str | None]:
     if tsb < -20:
         # Very fatigued — force recovery regardless of schedule
         if training_type not in ["Rest", "Recovery"]:
-            warning = f"⚠️ Your TSB is {tsb:.1f} (very fatigued). Scheduled workout downgraded to Recovery."
+            warning = f"⚠️ TSBが {tsb:.1f} です（極度の疲労）。今日のメニューを「リカバリー」に下方修正しました。"
             return "Recovery", warning
     elif tsb < -10:
         # Somewhat fatigued — step down one level
         rank = INTENSITY_RANK.index(training_type) if training_type in INTENSITY_RANK else -1
         if rank > 2:  # Only step down if above Endurance
             downgraded = INTENSITY_RANK[rank - 1]
-            warning = f"📉 TSB is {tsb:.1f} (some fatigue). Intensity reduced from {training_type} → {downgraded}."
+            warning = f"📉 TSBが {tsb:.1f} です（疲労蓄積）。強度を {training_type} → {downgraded} に調整しました。"
             return downgraded, warning
     elif tsb >= 5:
         # Fresh legs — optionally step up one level
         rank = INTENSITY_RANK.index(training_type) if training_type in INTENSITY_RANK else -1
         if 2 <= rank < len(INTENSITY_RANK) - 1:
             upgraded = INTENSITY_RANK[rank + 1]
-            warning = f"✅ TSB is {tsb:.1f} (fresh legs!). You could push to {upgraded} if feeling good."
+            warning = f"✅ TSBが {tsb:.1f} です（絶好調！）。余裕があれば {upgraded} に挑戦してみるのも良いでしょう。"
             return training_type, warning  # Suggest but don't force upgrade
     
     return training_type, warning
@@ -117,13 +117,6 @@ def adjust_for_tsb(training_type: str, tsb: float) -> tuple[str, str | None]:
 def generate_default_schedule(rest_days: list[str]) -> dict[str, str]:
     """
     Auto-generate a weekly schedule based on selected rest days.
-    Rules:
-    - Mon-Fri = short sessions (Zwift evening, 45-90 min)
-    - Sat-Sun = longer sessions possible (2-4 hours)
-    - Day after rest -> Threshold (fresh legs)
-    - Day before rest -> Tempo (taper)
-    - Weekends (non-rest) -> Long Endurance
-    - Other weekdays -> SST or VO2max (one per week)
     """
     days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
     weekends = {"sat", "sun"}
@@ -261,7 +254,7 @@ async def get_today_recommendation(request: Request):
         if adjusted_type == "Endurance":
             min_dur = round((tss_allowance * 60) / 56.25)
             max_dur = round((tss_allowance * 60) / 36.0)
-            training_info["duration"] = f"{min_dur}–{max_dur} min (Max)"
+            training_info["duration"] = f"{min_dur}–{max_dur} 分 (上限)"
             
         elif adjusted_type in ["Tempo", "SST", "Threshold", "VO2max"]:
             # Map types to target intensity factors
@@ -271,7 +264,8 @@ async def get_today_recommendation(request: Request):
             # Update duration label
             m2 = calc_m(2, target_if)
             if m2 > 0:
-                training_info["duration"] = f"{30 + 2*m2} min (2×{m2} min blocks)"
+                m2_f = min(m2, 20) # Default cap for duration label display
+                training_info["duration"] = f"{30 + 2*m2_f} 分 (2×{m2_f} 分ブロック)"
             
             # Update details text dynamically with a cap at the original value
             import re
@@ -281,16 +275,14 @@ async def get_today_recommendation(request: Request):
                 m = calc_m(sets, target_if)
                 # Never exceed the original planned duration
                 final_m = min(m, original_m)
-                return f"{sets}×{final_m} min"
+                return f"{sets}×{final_m} 分"
             
-            pattern = r"(\d+)×(\d+) min"
+            # Note: We now match "分" since the base strings are Japanese
+            pattern = r"(\d+)×(\d+) 分"
             training_info["details"] = re.sub(pattern, replacer, training_info["details"])
             
-            # Re-update duration label based on the (potentially capped) m2
-            m2_capped = min(calc_m(2, target_if), 20) # Default SST/Threshold usually starts around 20
-            # For simplicity, let's just use the updated details as the source of truth
             if m2 <= 0:
-                training_info["details"] = "⚠️ TSS limit is too low for intervals. Consider active recovery or rest."
+                training_info["details"] = "⚠️ TSS許容上限が低すぎます。完全休息またはリカバリーを推奨します。"
 
     return {
         "day": today,
