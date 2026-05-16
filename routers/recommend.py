@@ -248,16 +248,49 @@ async def get_today_recommendation(request: Request):
     # Convert % FTP to Watts for better UX
     training_info = format_training_with_ftp(raw_training_info, ftp)
     
-    # Adjust Duration for Endurance if TSB is low
-    if adjusted_type == "Endurance" and tss_allowance is not None:
-        # Intensity for Endurance is 60-75% FTP
-        # Duration (min) = (TSS * 60) / ( (Intensity/100)^2 * 100 )
-        min_dur = round((tss_allowance * 60) / 56.25) # at 75%
-        max_dur = round((tss_allowance * 60) / 36.0)  # at 60%
-        if min_dur > 0:
+    # Adjust Duration/Details for any training if TSB is low
+    if tss_allowance is not None:
+        def calc_m(sets, intensity_factor):
+            # Base TSS for WU/CD/Rest (approx 30-35 min) is around 12-15
+            base_tss = 10 + (sets * 2) # Heuristic
+            available = tss_allowance - base_tss
+            if available <= 0: return 0
+            # M = (available_tss * 60) / (sets * intensity^2 * 100)
+            return round((available * 60) / (sets * (intensity_factor**2) * 100))
+
+        if adjusted_type == "Endurance":
+            min_dur = round((tss_allowance * 60) / 56.25)
+            max_dur = round((tss_allowance * 60) / 36.0)
             training_info["duration"] = f"{min_dur}–{max_dur} min (Max)"
-        else:
-            training_info["duration"] = "0 min (Rest recommended)"
+            
+        elif adjusted_type in ["Tempo", "SST", "Threshold", "VO2max"]:
+            # Map types to target intensity factors
+            ifs = {"Tempo": 0.82, "SST": 0.90, "Threshold": 1.0, "VO2max": 1.13}
+            target_if = ifs.get(adjusted_type, 0.9)
+            
+            # Update duration label
+            m2 = calc_m(2, target_if)
+            if m2 > 0:
+                training_info["duration"] = f"{30 + 2*m2} min (2×{m2} min blocks)"
+            
+            # Update details text dynamically with a cap at the original value
+            import re
+            def replacer(match):
+                sets = int(match.group(1))
+                original_m = int(match.group(2))
+                m = calc_m(sets, target_if)
+                # Never exceed the original planned duration
+                final_m = min(m, original_m)
+                return f"{sets}×{final_m} min"
+            
+            pattern = r"(\d+)×(\d+) min"
+            training_info["details"] = re.sub(pattern, replacer, training_info["details"])
+            
+            # Re-update duration label based on the (potentially capped) m2
+            m2_capped = min(calc_m(2, target_if), 20) # Default SST/Threshold usually starts around 20
+            # For simplicity, let's just use the updated details as the source of truth
+            if m2 <= 0:
+                training_info["details"] = "⚠️ TSS limit is too low for intervals. Consider active recovery or rest."
 
     return {
         "day": today,
