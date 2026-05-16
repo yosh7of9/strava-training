@@ -146,53 +146,10 @@ async def process_activity(request: Request):
         total_tss_today += data.get("tss", 0)
         combined_watts.extend(data.get("watts_data", []))
     
-    # Filter 0W/Low power for distribution (ignore <= 20W)
-    filtered_watts = [w for w in combined_watts if w > 20]
-    p5, p50, p95 = None, None, None
-    if filtered_watts:
-        p5 = float(np.percentile(filtered_watts, 5))
-        p50 = float(np.percentile(filtered_watts, 50))
-        p95 = float(np.percentile(filtered_watts, 95))
-    
-    # Update CTL/ATL based on total_tss_today
-    pmc_history = user_data.get("pmc_history", [])
-    
-    prev_ctl = user_data.get("initial_ctl", 0.0)
-    prev_atl = user_data.get("initial_atl", 0.0)
-    
-    # If today's entry already exists, 'yesterday' is the one before it
-    is_update = False
-    if pmc_history and pmc_history[-1]["date"] == activity_date:
-        is_update = True
-        if len(pmc_history) > 1:
-            prev_ctl = pmc_history[-2]["ctl"]
-            prev_atl = pmc_history[-2]["atl"]
-
-    new_ctl = prev_ctl + (total_tss_today - prev_ctl) / 42.0
-    new_atl = prev_atl + (total_tss_today - prev_atl) / 7.0
-    
-    new_entry = {
-        "date": activity_date,
-        "tss": round(total_tss_today, 1),
-        "ctl": round(new_ctl, 1),
-        "atl": round(new_atl, 1),
-        "tsb": round(new_ctl - new_atl, 1),
-        "p5": round(p5, 1) if p5 is not None else None,
-        "p50": round(p50, 1) if p50 is not None else None,
-        "p95": round(p95, 1) if p95 is not None else None
-    }
-    
-    if is_update:
-        pmc_history[-1] = new_entry
-    else:
-        pmc_history.append(new_entry)
-    
-    # Update user document
-    user_ref.update({
-        "initial_ctl": round(new_ctl, 1),
-        "initial_atl": round(new_atl, 1),
-        "last_sync_date": activity_date,
-        "pmc_history": pmc_history[-1095:]
-    })
+    # We now use the robust sync_pmc_data function to handle gap filling
+    # and recalculate up to the date of the new activity.
+    from routers.sync import sync_pmc_data
+    target_date = datetime.strptime(activity_date, "%Y-%m-%d").date()
+    await sync_pmc_data(user_ref, user_data, target_date)
     
     return Response(status_code=status.HTTP_200_OK)
