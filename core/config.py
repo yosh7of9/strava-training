@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     GCP_PROJECT_ID: str = ""
     PUBSUB_TOPIC_ID: str = "strava-activity-events"
     SECRET_KEY: str = "supersecretkey"
+    GEMINI_API_KEY: str = ""
 
     class Config:
         env_file = ".env"

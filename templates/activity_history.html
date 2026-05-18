@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Activity History | Strava Training{% endblock %}
+
+{% block nav_items %}
+<div class="flex items-center space-x-4">
+    <a href="/dashboard" class="text-gray-600 hover:text-strava px-3 py-2 rounded-md text-sm font-semibold flex items-center">
+        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        Back to Dashboard
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Activity History</h1>
+            <p class="text-sm text-gray-500 mt-1">過去のアクティビティ分析とAIコーチレポートの一覧です。</p>
+        </div>
+    </div>
+
+    <!-- Activity List Card Grid -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="min-w-full divide-y divide-gray-100">
+            <!-- Header -->
+            <div class="bg-gray-50/70 grid grid-cols-12 gap-2 px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">
+                <div class="col-span-5 sm:col-span-6">Activity Info</div>
+                <div class="col-span-2 text-center">TSS</div>
+                <div class="col-span-2 text-center">RPE</div>
+                <div class="col-span-3 sm:col-span-2 text-right">AI Report</div>
+            </div>
+
+            <!-- Rows -->
+            <div class="divide-y divide-gray-100" id="activityRows">
+                {% if activities %}
+                    {% for act in activities %}
+                    <div class="grid grid-cols-12 gap-2 px-6 py-5 items-center hover:bg-gray-50/50 transition-colors">
+                        <!-- Info -->
+                        <div class="col-span-5 sm:col-span-6 flex flex-col min-w-0 pr-2">
+                            <a href="/activity/{{ act.id }}" class="text-sm md:text-base font-bold text-gray-800 hover:text-strava truncate">
+                                {{ act.name }}
+                            </a>
+                            <span class="text-xs text-gray-400 mt-1 flex items-center">
+                                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                {{ act.date }}
+                            </span>
+                        </div>
+
+                        <!-- TSS -->
+                        <div class="col-span-2 text-center">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-orange-600">
+                                {{ act.tss }}
+                            </span>
+                        </div>
+
+                        <!-- RPE -->
+                        <div class="col-span-2 text-center">
+                            {% if act.rpe %}
+                                {% if act.rpe <= 4 %}
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-600">
+                                    {{ act.rpe }}/10
+                                </span>
+                                {% elif act.rpe <= 7 %}
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-50 text-yellow-600">
+                                    {{ act.rpe }}/10
+                                </span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-50 text-red-600">
+                                    {{ act.rpe }}/10
+                                </span>
+                                {% endif %}
+                            {% else %}
+                            <span class="text-xs text-gray-400 font-medium">—</span>
+                            {% endif %}
+                        </div>
+
+                        <!-- AI Report State / Action Button -->
+                        <div class="col-span-3 sm:col-span-2 text-right">
+                            {% if act.ai_feedback %}
+                            <a href="/activity/{{ act.id }}" class="inline-flex items-center text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
+                                <span class="mr-1 hidden sm:inline">Read Report</span> 🧠
+                            </a>
+                            {% else %}
+                            <a href="/activity/{{ act.id }}" class="inline-flex items-center text-xs font-bold text-gray-400 hover:text-strava transition-colors">
+                                <span class="mr-1 hidden sm:inline">Evaluate</span> ⚙️
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="p-8 text-center text-gray-400 text-sm">
+                    同期されたアクティビティがありません。
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
