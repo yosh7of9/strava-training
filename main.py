@@ -100,8 +100,8 @@ async def dashboard(request: Request):
         latest_activity_data = latest_doc.to_dict()
         latest_activity_data["id"] = latest_doc.id
         
-        # Check if it needs RPE popup
-        if latest_activity_data.get("is_new_activity") is True:
+        # Check if it needs RPE popup (only show if is_new_activity is True AND rpe has not been set yet)
+        if latest_activity_data.get("is_new_activity") is True and latest_activity_data.get("rpe") is None:
             is_new_activity = True
             new_activity_id = latest_doc.id
             

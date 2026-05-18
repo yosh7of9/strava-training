@@ -362,7 +362,7 @@ async def evaluate_activity(request: Request, act_id: str):
     # 4. Save to Firestore
     update_payload = {
         "ai_feedback": ai_feedback,
-        "is_new_activity": False
+        "is_new_activity": True
     }
     if rpe_val is not None:
         update_payload["rpe"] = rpe_val
@@ -374,3 +374,20 @@ async def evaluate_activity(request: Request, act_id: str):
         "rpe": rpe_val,
         "ai_feedback": ai_feedback
     })
+
+
+@router.post("/{act_id}/read")
+async def mark_activity_as_read(act_id: str, request: Request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JSONResponse(content={"success": False, "error": "Unauthorized"}, status_code=401)
+        
+    db = get_db()
+    activity_ref = db.collection("users").document(user_id).collection("activities").document(act_id)
+    activity_doc = activity_ref.get()
+    if not activity_doc.exists:
+        return JSONResponse(content={"success": False, "error": "Activity not found"}, status_code=404)
+        
+    activity_ref.update({"is_new_activity": False})
+    return JSONResponse(content={"success": True})
+

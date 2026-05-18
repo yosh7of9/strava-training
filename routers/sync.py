@@ -287,6 +287,13 @@ async def sync_latest(request: Request):
     ftp = user_data.get("ftp", 200)
     max_hr = user_data.get("max_hr", 190)
     
+    # Preemptively clean up any previous is_new_activity flags
+    activities_ref = user_ref.collection("activities")
+    outstanding_new = activities_ref.where("is_new_activity", "==", True).get()
+    for doc in outstanding_new:
+        doc.reference.update({"is_new_activity": False})
+
+    
     # Step-wise search: 10 days -> 20 days -> 30 days -> 45 days
     headers = {"Authorization": f"Bearer {access_token}"}
     activities = []
