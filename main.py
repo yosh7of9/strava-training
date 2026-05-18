@@ -4,8 +4,9 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 from core.config import settings
-from routers import auth, settings as settings_router, sync as sync_router, webhook, processor, api as api_router, recommend as recommend_router
+from routers import auth, settings as settings_router, sync as sync_router, webhook, processor, api as api_router, recommend as recommend_router, activity as activity_router
 from core.database import get_db
+from google.cloud import firestore
 
 app = FastAPI(title="Strava Training Dashboard")
 
@@ -26,6 +27,7 @@ app.include_router(webhook.router)
 app.include_router(processor.router)
 app.include_router(api_router.router)
 app.include_router(recommend_router.router)
+app.include_router(activity_router.router)
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -87,10 +89,29 @@ async def dashboard(request: Request):
             "name": f"[{target_date_label}] " + ", ".join(names)
         }
         
+    # Fetch the absolute latest activity to check for is_new_activity and AI Feedback
+    latest_act_query = activities_ref.order_by("start_date", direction=firestore.Query.DESCENDING).limit(1).get()
+    latest_activity_data = None
+    is_new_activity = False
+    new_activity_id = None
+    
+    if latest_act_query:
+        latest_doc = latest_act_query[0]
+        latest_activity_data = latest_doc.to_dict()
+        latest_activity_data["id"] = latest_doc.id
+        
+        # Check if it needs RPE popup
+        if latest_activity_data.get("is_new_activity") is True:
+            is_new_activity = True
+            new_activity_id = latest_doc.id
+            
     return templates.TemplateResponse(
         request=request, name="dashboard.html", context={
             "title": "My Dashboard", 
             "user": user_data,
-            "last_activity": last_activity
+            "last_activity": last_activity,
+            "latest_activity": latest_activity_data,
+            "is_new_activity": is_new_activity,
+            "new_activity_id": new_activity_id
         }
     )

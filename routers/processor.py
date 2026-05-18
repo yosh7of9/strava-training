@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request, Response, status
 from core.database import get_db
 from routers.sync import calculate_tss
 from core.config import settings
+from core.analyzer import ActivityAnalyzer
 
 router = APIRouter(prefix="/processor", tags=["processor"])
 
@@ -110,18 +111,28 @@ async def process_activity(request: Request):
     activity = response.json()
     activity_date = activity.get("start_date_local", activity.get("start_date"))[:10]
     
-    # Fetch Power Streams for Distribution
-    url_streams = f"https://www.strava.com/api/v3/activities/{activity_id}/streams?keys=watts&key_by_type=true"
+    # Fetch Streams for Distribution and Analysis
+    url_streams = f"https://www.strava.com/api/v3/activities/{activity_id}/streams?keys=watts,heartrate,cadence&key_by_type=true"
     watts_data = []
+    hr_data = []
+    cad_data = []
     async with httpx.AsyncClient() as client:
         resp_streams = await client.get(url_streams, headers=headers)
         if resp_streams.status_code == 200:
             streams = resp_streams.json()
             if "watts" in streams:
                 watts_data = streams["watts"]["data"]
+            if "heartrate" in streams:
+                hr_data = streams["heartrate"]["data"]
+            if "cadence" in streams:
+                cad_data = streams["cadence"]["data"]
     
     # Calculate current activity TSS
     tss = calculate_tss(activity, ftp, max_hr)
+    
+    # Run ActivityAnalyzer
+    analyzer = ActivityAnalyzer(watts_data, hr_data, cad_data, ftp=ftp)
+    metrics = analyzer.analyze_all(workout_type_id=activity.get("workout_type"))
     
     # Save/Update this specific activity in its sub-collection
     start_date = activity.get("start_date_local", activity.get("start_date"))
@@ -133,7 +144,12 @@ async def process_activity(request: Request):
         "tss": round(tss, 1),
         "type": activity.get("type"),
         "moving_time": activity.get("moving_time", 0),
+        "average_heartrate": activity.get("average_heartrate"),
+        "average_cadence": activity.get("average_cadence"),
         "watts_data": watts_data, # Store for re-calculation if needed
+        "metrics": metrics,
+        "profile_key": metrics.get("profile_key"),
+        "is_new_activity": True,
         "synced_at": datetime.now(timezone.utc).isoformat()
     })
     

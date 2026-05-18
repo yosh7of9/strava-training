@@ -6,6 +6,8 @@
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
+<!-- Marked.js for AI Feedback Markdown Rendering -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 {% endblock %}
 
 {% block nav_items %}
@@ -23,14 +25,91 @@
         </button>
     </form>
 
-    <a href="/settings" class="text-gray-600 hover:text-strava px-2 md:px-3 py-2 rounded-md text-xs md:text-sm font-medium">Settings</a>
-    <a href="/auth/logout" class="text-gray-600 hover:text-strava px-2 md:px-3 py-2 rounded-md text-xs md:text-sm font-medium">Logout</a>
+    <!-- ≡ Hamburger Menu -->
+    <div class="relative inline-block text-left" id="hamburgerMenu">
+        <button type="button" onclick="toggleMenu()" class="inline-flex justify-center items-center p-2 rounded-md text-gray-600 hover:text-strava focus:outline-none" aria-expanded="false" aria-haspopup="true">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        </button>
+        <div id="dropdownMenu" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 hidden z-50">
+            <div class="py-1">
+                <a href="/activity/history" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900">Activity History</a>
+            </div>
+            <div class="py-1">
+                <a href="/settings" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900">Settings</a>
+                <a href="/auth/logout" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900">Logout</a>
+            </div>
+        </div>
+    </div>
 </div>
+
+<script>
+function toggleMenu() {
+    const menu = document.getElementById('dropdownMenu');
+    menu.classList.toggle('hidden');
+}
+document.addEventListener('click', function(e) {
+    const hamburger = document.getElementById('hamburgerMenu');
+    const menu = document.getElementById('dropdownMenu');
+    if (hamburger && !hamburger.contains(e.target) && menu) {
+        menu.classList.add('hidden');
+    }
+});
+</script>
 {% endblock %}
 
 {% block content %}
 <!-- Dashboard Header Removed (Redundant) -->
 
+{% if latest_activity and latest_activity.ai_feedback %}
+<!-- AI Coaching Report -->
+<div class="bg-white rounded-xl shadow-sm border border-blue-100 p-4 md:p-6 w-full mb-6 md:mb-8 bg-gradient-to-r from-blue-50/20 to-indigo-50/20">
+    <div class="flex items-center mb-4">
+        <span class="text-3xl mr-3">🤖</span>
+        <div>
+            <h2 class="text-base font-bold text-gray-800 flex items-center">
+                AI Coaching Report
+                <span class="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">Latest Ride</span>
+            </h2>
+            <p class="text-sm text-gray-500">{{ latest_activity.name }} ({{ latest_activity.date }})</p>
+        </div>
+        <div class="ml-auto text-right flex space-x-4">
+            <div>
+                <span class="text-xs text-gray-400">TSS</span>
+                <p class="text-sm font-semibold text-gray-700">{{ latest_activity.tss }}</p>
+            </div>
+            <div>
+                <span class="text-xs text-gray-400">RPE</span>
+                <p class="text-sm font-semibold text-gray-700">{{ latest_activity.rpe or 'Skipped' }}</p>
+            </div>
+            <div class="hidden sm:block">
+                <span class="text-xs text-gray-400">NP</span>
+                <p class="text-sm font-semibold text-gray-700">{{ latest_activity.metrics.normalized_power|default('—') }}W</p>
+            </div>
+        </div>
+    </div>
+    <div id="aiFeedbackContent" class="prose max-w-none text-sm text-gray-700 bg-white rounded-xl p-4 md:p-6 border border-gray-100 shadow-inner leading-relaxed overflow-x-auto">
+        <!-- Rendered AI feedback will be inserted here -->
+    </div>
+    <div class="mt-4 flex justify-between items-center text-xs text-gray-400">
+        <span>Coached by Gemini 2.5 Flash</span>
+        <a href="/activity/{{ latest_activity.id }}" class="text-blue-600 hover:text-blue-800 font-semibold flex items-center">
+            View Details & Re-evaluate
+            <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+        </a>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const rawMd = `{{ latest_activity.ai_feedback | safe }}`;
+        if (rawMd) {
+            document.getElementById('aiFeedbackContent').innerHTML = marked.parse(rawMd);
+        }
+    });
+</script>
+{% else %}
 <!-- Today's Recommendation -->
 <div id="recommendCard" class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 w-full mb-6 md:mb-8">
     <div class="flex items-center mb-3">
@@ -52,6 +131,116 @@
     <p id="recommendDetails" class="text-xs text-gray-500 bg-gray-50 rounded-lg p-3"></p>
     <div id="recommendWarning" class="mt-2 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-3 py-2 hidden"></div>
 </div>
+{% endif %}
+
+{% if is_new_activity %}
+<!-- RPE Popup Modal -->
+<div id="rpeModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity">
+    <div class="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-md w-full mx-4 overflow-hidden transform transition-all scale-100">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-orange-500 to-strava p-6 text-white">
+            <h3 class="text-lg font-extrabold flex items-center">
+                <span class="mr-2">🚴‍♂️</span> New Activity Synced!
+            </h3>
+            <p class="text-sm opacity-90 mt-1">「{{ latest_activity.name }}」を検知しました。今回のライドの主観的な強度はどうでしたか？</p>
+        </div>
+        
+        <!-- Form -->
+        <div id="rpeForm" class="p-6">
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                主観的運動強度 (RPE: 1〜10)
+            </label>
+            <div class="flex flex-col items-center justify-center bg-gray-50/70 rounded-xl p-4 mb-6 shadow-inner border border-gray-100">
+                <div class="flex items-baseline space-x-1">
+                    <span class="text-3xl font-black text-strava" id="rpeValue">6</span>
+                    <span class="text-xs text-gray-400">/ 10</span>
+                </div>
+                <span class="text-sm font-extrabold text-gray-700 mt-2 text-center" id="rpeDesc">きつい〜かなりきつい</span>
+            </div>
+            
+            <input type="range" id="rpeRange" min="1" max="10" value="6" 
+                   class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500 mb-6"
+                   oninput="updateRpeLabel(this.value)">
+            
+            <div class="flex space-x-3">
+                <button type="button" onclick="submitRpe(true)" class="flex-1 py-2.5 px-4 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                    スキップ
+                </button>
+                <button type="button" onclick="submitRpe(false)" class="flex-1 py-2.5 px-4 bg-strava hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center">
+                    送信してAI評価へ
+                </button>
+            </div>
+        </div>
+        
+        <!-- Loader (Hidden initially) -->
+        <div id="rpeLoader" class="hidden p-8 flex flex-col items-center justify-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-4 border-strava border-t-transparent mb-4"></div>
+            <p class="text-sm font-bold text-gray-800">AIコーチがライドを分析中...</p>
+            <p class="text-xs text-gray-400 mt-1 text-center">過去の類似ライドデータやコンディションを引き出し、アドバイスを生成しています。</p>
+        </div>
+    </div>
+</div>
+
+<script>
+const rpeLabels = {
+    1: "極めて楽 (Rest / Minimal)",
+    2: "とても楽 (Very Easy)",
+    3: "楽 (Easy)",
+    4: "ややきつい (Moderate)",
+    5: "きつい (Hard)",
+    6: "きつい〜かなりきつい (Hard to Very Hard)",
+    7: "かなりきつい (Very Hard)",
+    8: "非常にきつい (Extremely Hard)",
+    9: "極めてきつい (Near Maximal)",
+    10: "これ以上ないほどきつい (Maximal)"
+};
+
+function updateRpeLabel(val) {
+    const valEl = document.getElementById('rpeValue');
+    const descEl = document.getElementById('rpeDesc');
+    if (valEl) valEl.textContent = val;
+    if (descEl) descEl.textContent = rpeLabels[val] || '';
+}
+
+// Initialize RPE description on popup render
+document.addEventListener("DOMContentLoaded", function() {
+    const rpeEl = document.getElementById('rpeRange');
+    if (rpeEl) {
+        updateRpeLabel(rpeEl.value);
+    }
+});
+
+async function submitRpe(skip) {
+    const rpeVal = skip ? null : document.getElementById('rpeRange').value;
+    const form = document.getElementById('rpeForm');
+    const loader = document.getElementById('rpeLoader');
+    
+    form.classList.add('hidden');
+    loader.classList.remove('hidden');
+    
+    try {
+        const response = await fetch('/activity/{{ new_activity_id }}/evaluate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ rpe: rpeVal })
+        });
+        
+        if (response.ok) {
+            window.location.reload();
+        } else {
+            alert('AI評価の生成中にエラーが発生しました。');
+            window.location.reload();
+        }
+    } catch (e) {
+        console.error(e);
+        alert('通信エラーが発生しました。');
+        window.location.reload();
+    }
+}
+</script>
+{% endif %}
 
 <!-- Metrics Overview -->
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">

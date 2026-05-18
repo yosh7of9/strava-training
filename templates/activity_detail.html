@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block title %}{{ activity.name }} | Activity Detail{% endblock %}
+
+{% block head %}
+<!-- Marked.js for Markdown -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+{% endblock %}
+
+{% block nav_items %}
+<div class="flex items-center space-x-4">
+    <a href="/activity/history" class="text-gray-600 hover:text-strava px-3 py-2 rounded-md text-sm font-semibold flex items-center">
+        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+        Back to History
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto py-4 px-4 sm:px-6 lg:px-8 space-y-4">
+    
+    <!-- 1. Top Header (Name Card) -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col md:flex-row justify-between items-start md:items-center">
+        <div>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-50 text-strava uppercase tracking-wider mb-1.5">
+                {{ activity.type }}
+            </span>
+            <h1 class="text-xl md:text-2xl font-extrabold text-gray-900 tracking-tight leading-tight">{{ activity.name }}</h1>
+            <p class="text-xs text-gray-400 mt-0.5 flex items-center">
+                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                {{ activity.date }}
+            </p>
+        </div>
+        <div class="mt-3 md:mt-0 bg-gray-50 rounded-xl px-4 py-2 flex space-x-6 text-center shadow-inner">
+            <div>
+                <span class="text-[10px] text-gray-400 font-semibold block uppercase">Duration</span>
+                <span class="text-base font-extrabold text-gray-800">{{ (activity.moving_time/60)|round(1) }}m</span>
+            </div>
+            <div class="border-l border-gray-200 pl-6">
+                <span class="text-[10px] text-gray-400 font-semibold block uppercase">TSS</span>
+                <span class="text-base font-extrabold text-strava">{{ activity.tss }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Subjective RPE & Evaluation Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+        <div id="rpeForm" class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+            <!-- Left: Range Slider -->
+            <div class="flex-1 min-w-[200px]">
+                <h3 class="text-sm font-extrabold text-gray-800 flex items-center mb-1">
+                    <span class="mr-1.5">📝</span> Subjective RPE
+                </h3>
+                <input type="range" id="rpeRange" min="1" max="10" value="{{ activity.rpe|default(6) }}" 
+                       class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500 my-2"
+                       oninput="updateRpeLabel(this.value)">
+                <div class="flex justify-between text-[10px] text-gray-400 px-1">
+                    <span>1: 極めて楽</span>
+                    <span>10: 限界</span>
+                </div>
+            </div>
+            
+            <!-- Middle: Dynamic Borg scale value bubble -->
+            <div class="flex flex-col items-center justify-center bg-gray-50/80 rounded-xl px-4 py-2.5 border border-gray-100 min-w-[160px] text-center shadow-inner">
+                <div class="flex items-baseline space-x-0.5">
+                    <span class="text-2xl font-black text-strava" id="rpeValue">{{ activity.rpe|default(6) }}</span>
+                    <span class="text-[10px] text-gray-400">/ 10</span>
+                </div>
+                <span class="text-[11px] font-bold text-gray-700 mt-1" id="rpeDesc">分析中...</span>
+            </div>
+            
+            <!-- Right: Submit Buttons -->
+            <div class="flex flex-col justify-center space-y-1.5 min-w-[170px]">
+                <button type="button" onclick="submitRpe(false)" class="w-full py-2 px-3 bg-strava hover:bg-orange-600 text-white rounded-lg text-xs font-semibold transition-colors flex items-center justify-center shadow-sm">
+                    送信してAI評価を更新
+                </button>
+                <button type="button" onclick="submitRpe(true)" class="w-full py-1.5 px-3 border border-gray-200 rounded-lg text-[10px] font-semibold text-gray-500 hover:bg-gray-50 transition-colors">
+                    RPEなしで再生成
+                </button>
+            </div>
+        </div>
+        
+        <!-- Loader (Hidden initially) -->
+        <div id="rpeLoader" class="hidden py-4 flex flex-col items-center justify-center text-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-4 border-strava border-t-transparent mb-2"></div>
+            <p class="text-xs font-bold text-gray-800">AIコーチがライドを分析中...</p>
+        </div>
+    </div>
+
+    <!-- 3. AI Coaching Report (LLM Report) -->
+    <div class="bg-gradient-to-br from-blue-50/40 to-indigo-50/20 rounded-2xl shadow-sm border border-blue-100 p-4">
+        <h3 class="text-sm font-extrabold text-gray-800 mb-3 flex items-center">
+            <span class="mr-1.5">🧠</span> AI Coaching Report
+        </h3>
+        
+        <div id="aiFeedbackContainer">
+            {% if activity.ai_feedback %}
+            <div id="aiFeedbackRaw" style="display: none;">{{ activity.ai_feedback }}</div>
+            <div id="aiFeedbackContent" class="prose max-w-none text-xs text-gray-700 bg-white rounded-xl p-4 border border-gray-100 leading-relaxed overflow-x-auto shadow-inner">
+                <!-- Rendered markdown goes here -->
+            </div>
+            {% else %}
+            <div class="bg-white rounded-xl p-6 border border-gray-100 shadow-inner flex flex-col justify-center items-center text-center text-gray-400 text-xs py-8">
+                <span class="text-3xl mb-2">💤</span>
+                <p class="font-bold text-gray-700">AIレポートはまだ生成されていません。</p>
+                <p class="text-[10px] mt-0.5 text-gray-400 px-4">上部のスライダーからRPEを入力し、生成ボタンを押してください。</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 4. Key Metrics Comparison -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+        <h3 class="text-sm font-extrabold text-gray-800 mb-4 flex items-center">
+            <span class="mr-1.5">📊</span> Key Metrics Comparison
+        </h3>
+        
+        <div class="space-y-4">
+            <!-- NP -->
+            <div class="flex items-center justify-between border-b border-gray-50 pb-2.5">
+                <div>
+                    <p class="text-xs font-bold text-gray-800">Normalized Power (NP)</p>
+                    <p class="text-[10px] text-gray-400">実質的な運動強度（出力変動考慮）</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-sm font-extrabold text-gray-800">{{ activity.metrics.normalized_power|default('—') }} W</span>
+                    {% if baseline %}
+                    <p class="text-[10px] mt-0.5">
+                        <span class="text-gray-400">同種平均: {{ baseline.avg_np }}W</span>
+                        {% set diff = (activity.metrics.normalized_power|default(0) - baseline.avg_np)|round(1) %}
+                        {% if diff >= 0 %}
+                        <span class="text-green-500 font-bold ml-1">+{{ diff }}W 🚀</span>
+                        {% else %}
+                        <span class="text-red-400 font-medium ml-1">{{ diff }}W 📉</span>
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- EF (Efficiency Factor) -->
+            <div class="flex items-center justify-between border-b border-gray-50 pb-2.5">
+                <div>
+                    <div class="flex items-center space-x-1">
+                        <p class="text-xs font-bold text-gray-800">Efficiency Factor (EF)</p>
+                        {% if baseline and baseline.ef_slope is not none %}
+                            {% if baseline.ef_slope > 0.005 %}
+                            <span class="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-bold bg-green-50 text-green-600 border border-green-100">
+                                向上中 📈
+                            </span>
+                            {% elif baseline.ef_slope < -0.005 %}
+                            <span class="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">
+                                低下中 📉
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-bold bg-gray-50 text-gray-500 border border-gray-100">
+                                安定 ➡️
+                            </span>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    <p class="text-[10px] text-gray-400">有酸素効率（心拍1拍あたりのワット数 EF = NP/HR）</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-sm font-extrabold text-gray-800">
+                        {% if activity.metrics.efficiency_factor is not none %}{{ activity.metrics.efficiency_factor }}{% else %}データなし{% endif %}
+                    </span>
+                    {% if baseline and activity.metrics.efficiency_factor is not none %}
+                    <p class="text-[10px] mt-0.5">
+                        <span class="text-gray-400">同種平均: {{ baseline.avg_ef|default('—') }}</span>
+                        {% if baseline.avg_ef is not none %}
+                            {% set diff = (activity.metrics.efficiency_factor - baseline.avg_ef)|round(2) %}
+                            {% if diff >= 0 %}
+                            <span class="text-green-500 font-bold ml-1">+{{ diff }}</span>
+                            {% else %}
+                            <span class="text-red-400 font-medium ml-1">{{ diff }}</span>
+                            {% endif %}
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- VI -->
+            <div class="flex items-center justify-between border-b border-gray-50 pb-2.5">
+                <div>
+                    <p class="text-xs font-bold text-gray-800">Variability Index (VI)</p>
+                    <p class="text-[10px] text-gray-400">ペーシングの安定性（目標: ERG=1.00〜1.05）</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-sm font-extrabold text-gray-800">{{ activity.metrics.variability_index|default('—') }}</span>
+                    {% if baseline %}
+                    <p class="text-[10px] mt-0.5">
+                        <span class="text-gray-400">同種平均: {{ baseline.avg_vi }}</span>
+                        {% set diff = (activity.metrics.variability_index|default(0) - baseline.avg_vi)|round(2) %}
+                        {% if diff <= 0 %}
+                        <span class="text-green-500 font-bold ml-1">{{ diff }} (安定)</span>
+                        {% else %}
+                        <span class="text-amber-500 font-medium ml-1">+{{ diff }}</span>
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Aerobic Decoupling -->
+            <div class="flex items-center justify-between border-b border-gray-50 pb-2.5">
+                <div>
+                    <div class="flex items-center space-x-1">
+                        <p class="text-xs font-bold text-gray-800">Aerobic Decoupling</p>
+                        {% if baseline and baseline.decoupling_slope is not none %}
+                            {% if baseline.decoupling_slope < -0.1 %}
+                            <span class="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-bold bg-green-50 text-green-600 border border-green-100">
+                                向上中 📈
+                            </span>
+                            {% elif baseline.decoupling_slope > 0.1 %}
+                            <span class="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">
+                                低下中 📉
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-bold bg-gray-50 text-gray-500 border border-gray-100">
+                                安定 ➡️
+                            </span>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    <p class="text-[10px] text-gray-400">有酸素デカップリング（心拍ドリフト率, 目標: &lt;5%）</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-sm font-extrabold text-gray-800">
+                        {% if activity.metrics.aerobic_decoupling_pct is not none %}{{ activity.metrics.aerobic_decoupling_pct }}%{% else %}データなし{% endif %}
+                    </span>
+                    {% if baseline and activity.metrics.aerobic_decoupling_pct is not none %}
+                    <p class="text-[10px] mt-0.5">
+                        <span class="text-gray-400">同種平均: {{ baseline.avg_decoupling|default('—') }}%</span>
+                        {% if baseline.avg_decoupling is not none %}
+                            {% set diff = (activity.metrics.aerobic_decoupling_pct - baseline.avg_decoupling)|round(1) %}
+                            {% if diff <= 0 %}
+                            <span class="text-green-500 font-bold ml-1">{{ diff }}% 📈</span>
+                            {% else %}
+                            <span class="text-red-400 font-medium ml-1">+{{ diff }}% 📉</span>
+                            {% endif %}
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Cadence Drop-off -->
+            <div class="flex items-center justify-between border-b border-gray-50 pb-2.5">
+                <div>
+                    <div class="flex items-center space-x-1">
+                        <p class="text-xs font-bold text-gray-800">Cadence Drop-off</p>
+                        {% if baseline and baseline.cadence_slope is not none %}
+                            {% if baseline.cadence_slope > 0.1 %}
+                            <span class="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-bold bg-green-50 text-green-600 border border-green-100">
+                                向上中 📈
+                            </span>
+                            {% elif baseline.cadence_slope < -0.1 %}
+                            <span class="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-bold bg-red-50 text-red-600 border border-red-100">
+                                低下中 📉
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-bold bg-gray-50 text-gray-500 border border-gray-100">
+                                安定 ➡️
+                            </span>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    <p class="text-[10px] text-gray-400">ライド後半でのケイデンスの低下（筋肉疲労）</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-sm font-extrabold text-gray-800">
+                        {% if activity.metrics.cadence_dropoff_rpm is not none %}{{ activity.metrics.cadence_dropoff_rpm }} rpm{% else %}データなし{% endif %}
+                    </span>
+                    {% if baseline and activity.metrics.cadence_dropoff_rpm is not none %}
+                    <p class="text-[10px] mt-0.5">
+                        <span class="text-gray-400">同種平均: {{ baseline.avg_cadence_dropoff|default('—') }} rpm</span>
+                        {% if baseline.avg_cadence_dropoff is not none %}
+                            {% set diff = (activity.metrics.cadence_dropoff_rpm - baseline.avg_cadence_dropoff)|round(1) %}
+                            {% if diff >= 0 %}
+                            <span class="text-green-500 font-bold ml-1">+{{ diff }} rpm</span>
+                            {% else %}
+                            <span class="text-red-400 font-medium ml-1">{{ diff }} rpm ⚠️</span>
+                            {% endif %}
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Matches Burned -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-bold text-gray-800">Matches Burned</p>
+                    <p class="text-[10px] text-gray-400">高強度アタック数（120% FTP超アタック回数）</p>
+                </div>
+                <div class="text-right font-extrabold text-gray-800 text-sm">
+                    {{ activity.metrics.matches_burned|default(0) }} 回
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const rpeLabels = {
+        1: "極めて楽 (Rest / Minimal)",
+        2: "とても楽 (Very Easy)",
+        3: "楽 (Easy)",
+        4: "ややきつい (Moderate)",
+        5: "きつい (Hard)",
+        6: "きつい〜かなりきつい (Hard to Very Hard)",
+        7: "かなりきつい (Very Hard)",
+        8: "非常にきつい (Extremely Hard)",
+        9: "極めてきつい (Near Maximal)",
+        10: "これ以上ないほどきつい (Maximal)"
+    };
+
+    function updateRpeLabel(val) {
+        document.getElementById('rpeValue').textContent = val;
+        document.getElementById('rpeDesc').textContent = rpeLabels[val] || '';
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const rawMdEl = document.getElementById('aiFeedbackRaw');
+        if (rawMdEl) {
+            const rawMd = rawMdEl.textContent;
+            if (rawMd) {
+                document.getElementById('aiFeedbackContent').innerHTML = marked.parse(rawMd);
+            }
+        }
+        
+        // Initialize RPE description
+        const initialRpe = document.getElementById('rpeRange').value;
+        updateRpeLabel(initialRpe);
+    });
+
+    async function submitRpe(skip) {
+        const rpeVal = skip ? null : document.getElementById('rpeRange').value;
+        const form = document.getElementById('rpeForm');
+        const loader = document.getElementById('rpeLoader');
+        
+        form.classList.add('hidden');
+        loader.classList.remove('hidden');
+        
+        try {
+            const response = await fetch('/activity/{{ activity.id }}/evaluate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ rpe: rpeVal })
+            });
+            
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                alert('AI評価の生成中にエラーが発生しました。');
+                window.location.reload();
+            }
+        } catch (e) {
+            console.error(e);
+            alert('通信エラーが発生しました。');
+            window.location.reload();
+        }
+    }
+</script>
+{% endblock %}

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Request, HTTPException, status
 from fastapi.responses import RedirectResponse
 from core.database import get_db
+from core.analyzer import ActivityAnalyzer
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
@@ -326,18 +327,28 @@ async def sync_latest(request: Request):
             if act_id in existing_ids and act_id != latest_act_id:
                 continue
                 
-            # Fetch streams (watts) for new or latest activity to ensure box plot works
+            # Fetch streams for new or latest activity for box plot and analysis
             watts_data = []
-            url_streams = f"https://www.strava.com/api/v3/activities/{act_id}/streams?keys=watts&key_by_type=true"
+            hr_data = []
+            cad_data = []
+            url_streams = f"https://www.strava.com/api/v3/activities/{act_id}/streams?keys=watts,heartrate,cadence&key_by_type=true"
             resp_streams = await client.get(url_streams, headers=headers)
             if resp_streams.status_code == 200:
                 streams = resp_streams.json()
                 if "watts" in streams:
                     watts_data = streams["watts"]["data"]
+                if "heartrate" in streams:
+                    hr_data = streams["heartrate"]["data"]
+                if "cadence" in streams:
+                    cad_data = streams["cadence"]["data"]
 
             start_iso = act.get("start_date_local", act.get("start_date"))
             date_only = start_iso[:10]
             tss = calculate_tss(act, ftp, max_hr)
+            
+            # Run ActivityAnalyzer
+            analyzer = ActivityAnalyzer(watts_data, hr_data, cad_data, ftp=ftp)
+            metrics = analyzer.analyze_all(workout_type_id=act.get("workout_type"))
             
             user_ref.collection("activities").document(act_id).set({
                 "name": act.get("name"),
@@ -346,7 +357,12 @@ async def sync_latest(request: Request):
                 "tss": round(tss, 1),
                 "type": act.get("type"),
                 "moving_time": act.get("moving_time", 0),
+                "average_heartrate": act.get("average_heartrate"),
+                "average_cadence": act.get("average_cadence"),
                 "watts_data": watts_data,
+                "metrics": metrics,
+                "profile_key": metrics.get("profile_key"),
+                "is_new_activity": True,
                 "synced_at": datetime.now(timezone.utc).isoformat()
             })
     
