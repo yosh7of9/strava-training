@@ -181,15 +181,36 @@
                 </div>
             </div>
 
+            <!-- IF (Intensity Factor) -->
+            <div class="flex items-center justify-between border-b border-gray-50 pb-2.5">
+                <div>
+                    <p class="text-xs font-bold text-gray-800">Intensity Factor (IF)</p>
+                    <p class="text-[10px] text-gray-400">運動強度（FTPに対するNPの比率。IF = NP/FTP）</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-sm font-extrabold text-gray-800">
+                        {% if activity.metrics.intensity_factor is not none %}{{ "%.2f"|format(activity.metrics.intensity_factor) }}{% else %}データなし{% endif %}
+                    </span>
+                </div>
+            </div>
+
             <!-- VI -->
             <div class="flex items-center justify-between border-b border-gray-50 pb-2.5">
                 <div>
                     <p class="text-xs font-bold text-gray-800">Variability Index (VI)</p>
-                    <p class="text-[10px] text-gray-400">ペーシングの安定性（目標: ERG=1.00〜1.05）</p>
+                    <p class="text-[10px] text-gray-400">
+                        {% if is_workout %}
+                        ペーシングの安定性（※ワークアウト時はERG制御のため評価対象外）
+                        {% else %}
+                        ペーシングの安定性（目標: 1.00〜1.05 の均一な出力）
+                        {% endif %}
+                    </p>
                 </div>
                 <div class="text-right">
-                    <span class="text-sm font-extrabold text-gray-800">{{ activity.metrics.variability_index|default('—') }}</span>
-                    {% if baseline %}
+                    <span class="text-sm font-extrabold {% if is_workout %}text-gray-400 font-normal{% else %}text-gray-800{% endif %}">
+                        {{ activity.metrics.variability_index|default('—') }}
+                    </span>
+                    {% if baseline and not is_workout %}
                     <p class="text-[10px] mt-0.5">
                         <span class="text-gray-400">同種平均: {{ baseline.avg_vi }}</span>
                         {% set diff = (activity.metrics.variability_index|default(0) - baseline.avg_vi)|round(2) %}
