@@ -209,33 +209,40 @@ async def get_today_recommendation(request: Request):
     current_atl = user_data.get("initial_atl", 0.0)
     tsb = round(current_ctl - current_atl, 1)
     
-    # Get today's day of week
-    today = datetime.now(timezone.utc).strftime("%a").lower()  # mon, tue, ...
+    # Get today's day of week (JST)
+    from datetime import timezone, timedelta
+    jst = timezone(timedelta(hours=9))
+    today = datetime.now(jst).strftime("%a").lower()  # mon, tue, ...
     
     scheduled_type = weekly_schedule.get(today, "Endurance")
     if not scheduled_type:
         scheduled_type = "Endurance"
     
-    adjusted_type, warning = adjust_for_tsb(scheduled_type, tsb)
+    # Check if a custom type is requested via query parameter
+    custom_type = request.query_params.get("type")
+    if custom_type in TRAINING_TYPES:
+        adjusted_type = custom_type
+    else:
+        adjusted_type = scheduled_type
     
     # Calculate TSS allowance if TSB is low (<= -10)
     tss_allowance = None
+    warning = None
     if tsb <= -10:
         # Target TSB formula provided by user
-        # TSB_allow = -10 - 0.2 * Current_CTL + 0.3 * Current_TSB
         target_tsb = -10 - (0.2 * current_ctl) + (0.3 * tsb)
         
-        # Reverse calculation for TSS:
-        # TSB_after = TSB_now - 5/42 * TSS - CTL/42 + ATL/7 >= TSB_allow
-        # TSS <= (TSB_now - TSB_allow - CTL/42 + ATL/7) * 42/5
+        # Reverse calculation for TSS
         tss_limit = (tsb - target_tsb - (current_ctl / 42.0) + (current_atl / 7.0)) * 8.4
         tss_allowance = max(0, round(tss_limit))
         
-        allowance_msg = f"💡 今日のTSS許容上限は {tss_allowance} です。これを超える強度のトレーニングは控えましょう。"
-        if warning:
-            warning += f" {allowance_msg}"
-        else:
-            warning = allowance_msg
+        warning = f"💡 今日のTSS許容上限は {tss_allowance} です。これを超える強度のトレーニングは控えましょう。"
+    elif tsb >= 5:
+        rank = INTENSITY_RANK.index(adjusted_type) if adjusted_type in INTENSITY_RANK else -1
+        if 2 <= rank < len(INTENSITY_RANK) - 1:
+            upgraded = INTENSITY_RANK[rank + 1]
+            upgraded_label = TRAINING_TYPES[upgraded]["label"]
+            warning = f"✅ TSBが {tsb:.1f} です（絶好調！）。余裕があればプルダウンから「{upgraded_label}」に挑戦してみるのも良いでしょう。"
 
     raw_training_info = TRAINING_TYPES.get(adjusted_type, TRAINING_TYPES["Endurance"])
     # Convert % FTP to Watts for better UX
@@ -255,6 +262,32 @@ async def get_today_recommendation(request: Request):
             min_dur = round((tss_allowance * 60) / 56.25)
             max_dur = round((tss_allowance * 60) / 36.0)
             training_info["duration"] = f"{min_dur}–{max_dur} 分 (上限)"
+            
+        elif adjusted_type == "Long Endurance":
+            if tss_allowance < 168.75:
+                if tss_allowance < 72:
+                    training_info["duration"] = "120 分 (上限)"
+                    high_pct = round((tss_allowance * 50) ** 0.5)
+                    low_pct = round(high_pct * 0.8)
+                elif tss_allowance <= 108:
+                    max_dur_mins = round((tss_allowance * 60) / 36)
+                    training_info["duration"] = f"120–{max_dur_mins} 分 (上限)"
+                    low_pct = 60
+                    high_pct = 60
+                else:
+                    training_info["duration"] = "120–180 分 (上限)"
+                    low_pct = 60
+                    high_pct = round((tss_allowance * 100 / 3) ** 0.5)
+                
+                low_w = int(ftp * low_pct / 100)
+                high_w = int(ftp * high_pct / 100)
+                
+                if low_pct == high_pct:
+                    training_info["intensity"] = f"{low_w}W"
+                    training_info["details"] = f"{low_w}W を維持して走り続けます。強度は上げすぎず、一貫性とサドルの上での時間を重視してください。"
+                else:
+                    training_info["intensity"] = f"{low_w}–{high_w}W"
+                    training_info["details"] = f"{low_w}–{high_w}W を維持して走り続けます。強度は上げすぎず、一貫性とサドルの上での時間を重視してください。"
             
         elif adjusted_type in ["Tempo", "SST", "Threshold", "VO2max"]:
             # Map types to target intensity factors

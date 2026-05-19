@@ -14,48 +14,62 @@
 <div class="flex items-center space-x-2 md:space-x-4">
     <span class="text-xs md:text-sm font-medium text-gray-700 hidden lg:block">Hi, {{ user.name }}</span>
     {% if user.profile_image %}
-    <img src="{{ user.profile_image }}" alt="Profile" class="h-8 w-8 rounded-full border border-gray-300 hidden sm:block">
+    <img src="{{ user.profile_image }}" alt="Profile"
+        class="h-8 w-8 rounded-full border border-gray-300 hidden sm:block">
     {% endif %}
-    
+
     <!-- Sync Button in Navbar (Incremental Sync) -->
     <form action="/sync/latest" method="POST" class="inline">
-        <button type="submit" class="text-gray-600 hover:text-strava px-2 py-2 rounded-md text-xs md:text-sm font-medium flex items-center" title="Sync Latest Activities">
-            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        <button type="submit"
+            class="text-gray-600 hover:text-strava px-2 py-2 rounded-md text-xs md:text-sm font-medium flex items-center"
+            title="Sync Latest Activities">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                </path>
+            </svg>
             <span class="hidden md:inline">Sync</span>
         </button>
     </form>
 
     <!-- ≡ Hamburger Menu -->
     <div class="relative inline-block text-left" id="hamburgerMenu">
-        <button type="button" onclick="toggleMenu()" class="inline-flex justify-center items-center p-2 rounded-md text-gray-600 hover:text-strava focus:outline-none" aria-expanded="false" aria-haspopup="true">
+        <button type="button" onclick="toggleMenu()"
+            class="inline-flex justify-center items-center p-2 rounded-md text-gray-600 hover:text-strava focus:outline-none"
+            aria-expanded="false" aria-haspopup="true">
             <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
         </button>
-        <div id="dropdownMenu" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 hidden z-50">
+        <div id="dropdownMenu"
+            class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 hidden z-50">
             <div class="py-1">
-                <a href="/activity/history" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900">Activity History</a>
+                <a href="/activity/history"
+                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900">Activity
+                    History</a>
             </div>
             <div class="py-1">
-                <a href="/settings" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900">Settings</a>
-                <a href="/auth/logout" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900">Logout</a>
+                <a href="/settings"
+                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900">Settings</a>
+                <a href="/auth/logout"
+                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900">Logout</a>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-function toggleMenu() {
-    const menu = document.getElementById('dropdownMenu');
-    menu.classList.toggle('hidden');
-}
-document.addEventListener('click', function(e) {
-    const hamburger = document.getElementById('hamburgerMenu');
-    const menu = document.getElementById('dropdownMenu');
-    if (hamburger && !hamburger.contains(e.target) && menu) {
-        menu.classList.add('hidden');
+    function toggleMenu() {
+        const menu = document.getElementById('dropdownMenu');
+        menu.classList.toggle('hidden');
     }
-});
+    document.addEventListener('click', function (e) {
+        const hamburger = document.getElementById('hamburgerMenu');
+        const menu = document.getElementById('dropdownMenu');
+        if (hamburger && !hamburger.contains(e.target) && menu) {
+            menu.classList.add('hidden');
+        }
+    });
 </script>
 {% endblock %}
 
@@ -64,13 +78,15 @@ document.addEventListener('click', function(e) {
 
 {% if latest_activity and latest_activity.ai_feedback and latest_activity.is_new_activity %}
 <!-- AI Coaching Report -->
-<div class="bg-white rounded-xl shadow-sm border border-blue-100 p-4 md:p-6 w-full mb-6 md:mb-8 bg-gradient-to-r from-blue-50/20 to-indigo-50/20">
+<div
+    class="bg-white rounded-xl shadow-sm border border-blue-100 p-4 md:p-6 w-full mb-6 md:mb-8 bg-gradient-to-r from-blue-50/20 to-indigo-50/20">
     <div class="flex items-center mb-4">
         <span class="text-3xl mr-3">🤖</span>
         <div>
             <h2 class="text-base font-bold text-gray-800 flex items-center">
                 AI Coaching Report
-                <span class="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">Latest Ride</span>
+                <span class="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">Latest
+                    Ride</span>
             </h2>
             <p class="text-sm text-gray-500">{{ latest_activity.name }} ({{ latest_activity.date }})</p>
         </div>
@@ -85,30 +101,35 @@ document.addEventListener('click', function(e) {
             </div>
             <div class="hidden sm:block">
                 <span class="text-xs text-gray-400">NP</span>
-                <p class="text-sm font-semibold text-gray-700">{{ latest_activity.metrics.normalized_power|default('—') }}W</p>
+                <p class="text-sm font-semibold text-gray-700">{{ latest_activity.metrics.normalized_power|default('—')
+                    }}W</p>
             </div>
         </div>
     </div>
-    <div id="aiFeedbackContent" class="prose max-w-none text-sm text-gray-700 bg-white rounded-xl p-4 md:p-6 border border-gray-100 shadow-inner leading-relaxed overflow-x-auto">
+    <div id="aiFeedbackContent"
+        class="prose max-w-none text-sm text-gray-700 bg-white rounded-xl p-4 md:p-6 border border-gray-100 shadow-inner leading-relaxed overflow-x-auto">
         <!-- Rendered AI feedback will be inserted here -->
     </div>
     <div class="mt-4 flex justify-between items-center text-xs text-gray-400">
-        <button type="button" onclick="markReportAsRead('{{ latest_activity.id }}')" 
-                class="py-1 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center hover:scale-[1.02] active:scale-95">
+        <button type="button" onclick="markReportAsRead('{{ latest_activity.id }}')"
+            class="py-1 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center hover:scale-[1.02] active:scale-95">
             OK
         </button>
         <div class="flex items-center space-x-3">
             <span>Coached by Gemini 2.5 Flash</span>
-            <a href="/activity/{{ latest_activity.id }}" class="text-blue-600 hover:text-blue-800 font-semibold flex items-center">
+            <a href="/activity/{{ latest_activity.id }}"
+                class="text-blue-600 hover:text-blue-800 font-semibold flex items-center">
                 詳細表示 & 再評価
-                <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
             </a>
         </div>
     </div>
 </div>
 
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener("DOMContentLoaded", function () {
         const rawMd = `{{ latest_activity.ai_feedback | safe }}`;
         if (rawMd) {
             document.getElementById('aiFeedbackContent').innerHTML = marked.parse(rawMd);
@@ -138,7 +159,16 @@ document.addEventListener('click', function(e) {
         <span id="recommendEmoji" class="text-3xl mr-3">⏳</span>
         <div>
             <h2 class="text-base font-bold text-gray-800">Today's Recommendation</h2>
-            <p id="recommendLabel" class="text-sm text-gray-500">Loading...</p>
+            <select id="recommendTypeSelect" class="mt-1 block text-xs font-semibold rounded-md border-gray-200 bg-white text-gray-700 focus:ring-strava focus:border-strava py-1 px-2 border">
+                <option value="Rest">レスト（休息）</option>
+                <option value="Recovery">リカバリー（回復走）</option>
+                <option value="Endurance">エンデュランス（有酸素）</option>
+                <option value="Tempo">テンポ</option>
+                <option value="SST">Sweet Spot Training (SST)</option>
+                <option value="Threshold">閾値（Threshold）</option>
+                <option value="VO2max">VO2max（最大酸素摂取量）</option>
+                <option value="Long Endurance">ロングライド</option>
+            </select>
         </div>
         <div class="ml-auto text-right">
             <span class="text-xs text-gray-400">Duration</span>
@@ -151,14 +181,17 @@ document.addEventListener('click', function(e) {
     </div>
     <p id="recommendDescription" class="text-sm text-gray-600 mb-2"></p>
     <p id="recommendDetails" class="text-xs text-gray-500 bg-gray-50 rounded-lg p-3"></p>
-    <div id="recommendWarning" class="mt-2 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-3 py-2 hidden"></div>
+    <div id="recommendWarning" class="mt-2 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-3 py-2 hidden">
+    </div>
 </div>
 {% endif %}
 
 {% if is_new_activity %}
 <!-- RPE Popup Modal -->
-<div id="rpeModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity">
-    <div class="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-md w-full mx-4 overflow-hidden transform transition-all scale-100">
+<div id="rpeModal"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity">
+    <div
+        class="bg-white rounded-2xl shadow-xl border border-gray-100 max-w-md w-full mx-4 overflow-hidden transform transition-all scale-100">
         <!-- Header -->
         <div class="bg-gradient-to-r from-orange-500 to-strava p-6 text-white">
             <h3 class="text-lg font-extrabold flex items-center">
@@ -166,34 +199,37 @@ document.addEventListener('click', function(e) {
             </h3>
             <p class="text-sm opacity-90 mt-1">「{{ latest_activity.name }}」を検知しました。今回のライドの主観的な強度はどうでしたか？</p>
         </div>
-        
+
         <!-- Form -->
         <div id="rpeForm" class="p-6">
             <label class="block text-sm font-semibold text-gray-700 mb-2">
                 主観的運動強度 (RPE: 1〜10)
             </label>
-            <div class="flex flex-col items-center justify-center bg-gray-50/70 rounded-xl p-4 mb-6 shadow-inner border border-gray-100">
+            <div
+                class="flex flex-col items-center justify-center bg-gray-50/70 rounded-xl p-4 mb-6 shadow-inner border border-gray-100">
                 <div class="flex items-baseline space-x-1">
                     <span class="text-3xl font-black text-strava" id="rpeValue">6</span>
                     <span class="text-xs text-gray-400">/ 10</span>
                 </div>
                 <span class="text-sm font-extrabold text-gray-700 mt-2 text-center" id="rpeDesc">きつい〜かなりきつい</span>
             </div>
-            
-            <input type="range" id="rpeRange" min="1" max="10" value="6" 
-                   class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500 mb-6"
-                   oninput="updateRpeLabel(this.value)">
-            
+
+            <input type="range" id="rpeRange" min="1" max="10" value="6"
+                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-500 mb-6"
+                oninput="updateRpeLabel(this.value)">
+
             <div class="flex space-x-3">
-                <button type="button" onclick="submitRpe(true)" class="flex-1 py-2.5 px-4 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                <button type="button" onclick="submitRpe(true)"
+                    class="flex-1 py-2.5 px-4 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
                     スキップ
                 </button>
-                <button type="button" onclick="submitRpe(false)" class="flex-1 py-2.5 px-4 bg-strava hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center">
+                <button type="button" onclick="submitRpe(false)"
+                    class="flex-1 py-2.5 px-4 bg-strava hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center">
                     送信してAI評価へ
                 </button>
             </div>
         </div>
-        
+
         <!-- Loader (Hidden initially) -->
         <div id="rpeLoader" class="hidden p-8 flex flex-col items-center justify-center">
             <div class="animate-spin rounded-full h-12 w-12 border-4 border-strava border-t-transparent mb-4"></div>
@@ -204,84 +240,94 @@ document.addEventListener('click', function(e) {
 </div>
 
 <script>
-const rpeLabels = {
-    1: "極めて楽 (Rest / Minimal)",
-    2: "とても楽 (Very Easy)",
-    3: "楽 (Easy)",
-    4: "ややきつい (Moderate)",
-    5: "きつい (Hard)",
-    6: "きつい〜かなりきつい (Hard to Very Hard)",
-    7: "かなりきつい (Very Hard)",
-    8: "非常にきつい (Extremely Hard)",
-    9: "極めてきつい (Near Maximal)",
-    10: "これ以上ないほどきつい (Maximal)"
-};
+    const rpeLabels = {
+        1: "極めて楽 (Rest / Minimal)",
+        2: "とても楽 (Very Easy)",
+        3: "楽 (Easy)",
+        4: "ややきつい (Moderate)",
+        5: "きつい (Hard)",
+        6: "きつい〜かなりきつい (Hard to Very Hard)",
+        7: "かなりきつい (Very Hard)",
+        8: "非常にきつい (Extremely Hard)",
+        9: "極めてきつい (Near Maximal)",
+        10: "これ以上ないほどきつい (Maximal)"
+    };
 
-function updateRpeLabel(val) {
-    const valEl = document.getElementById('rpeValue');
-    const descEl = document.getElementById('rpeDesc');
-    if (valEl) valEl.textContent = val;
-    if (descEl) descEl.textContent = rpeLabels[val] || '';
-}
-
-// Initialize RPE description on popup render
-document.addEventListener("DOMContentLoaded", function() {
-    const rpeEl = document.getElementById('rpeRange');
-    if (rpeEl) {
-        updateRpeLabel(rpeEl.value);
+    function updateRpeLabel(val) {
+        const valEl = document.getElementById('rpeValue');
+        const descEl = document.getElementById('rpeDesc');
+        if (valEl) valEl.textContent = val;
+        if (descEl) descEl.textContent = rpeLabels[val] || '';
     }
-});
 
-async function submitRpe(skip) {
-    const rpeVal = skip ? null : document.getElementById('rpeRange').value;
-    const form = document.getElementById('rpeForm');
-    const loader = document.getElementById('rpeLoader');
-    
-    form.classList.add('hidden');
-    loader.classList.remove('hidden');
-    
-    try {
-        const response = await fetch('/activity/{{ new_activity_id }}/evaluate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ rpe: rpeVal })
-        });
-        
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            alert('AI評価の生成中にエラーが発生しました。');
+    // Initialize RPE description on popup render
+    document.addEventListener("DOMContentLoaded", function () {
+        const rpeEl = document.getElementById('rpeRange');
+        if (rpeEl) {
+            updateRpeLabel(rpeEl.value);
+        }
+    });
+
+    async function submitRpe(skip) {
+        const rpeVal = skip ? null : document.getElementById('rpeRange').value;
+        const form = document.getElementById('rpeForm');
+        const loader = document.getElementById('rpeLoader');
+
+        form.classList.add('hidden');
+        loader.classList.remove('hidden');
+
+        try {
+            const response = await fetch('/activity/{{ new_activity_id }}/evaluate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ rpe: rpeVal })
+            });
+
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                alert('AI評価の生成中にエラーが発生しました。');
+                window.location.reload();
+            }
+        } catch (e) {
+            console.error(e);
+            alert('通信エラーが発生しました。');
             window.location.reload();
         }
-    } catch (e) {
-        console.error(e);
-        alert('通信エラーが発生しました。');
-        window.location.reload();
     }
-}
 </script>
 {% endif %}
 
 <!-- Metrics Overview -->
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
-        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2">TSB (Form)</span>
-        <span class="text-3xl md:text-4xl font-extrabold {% if (user.initial_ctl|default(0) - user.initial_atl|default(0)) >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
+    <div
+        class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
+        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2">TSB
+            (Form)</span>
+        <span
+            class="text-3xl md:text-4xl font-extrabold {% if (user.initial_ctl|default(0) - user.initial_atl|default(0)) >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
             {{ (user.initial_ctl|default(0) - user.initial_atl|default(0)) | round(1) }}
         </span>
     </div>
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
-        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2">CTL (Fitness)</span>
+    <div
+        class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
+        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2">CTL
+            (Fitness)</span>
         <span class="text-3xl md:text-4xl font-extrabold text-blue-600">{{ user.initial_ctl|default(0) }}</span>
     </div>
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
-        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2">ATL (Fatigue)</span>
+    <div
+        class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
+        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2">ATL
+            (Fatigue)</span>
         <span class="text-3xl md:text-4xl font-extrabold text-orange-500">{{ user.initial_atl|default(0) }}</span>
     </div>
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
-        <span class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2 text-center">Recent Training TSS</span>
+    <div
+        class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col items-center justify-center">
+        <span
+            class="text-gray-500 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2 text-center">Recent
+            Training TSS</span>
         <span class="text-3xl md:text-4xl font-extrabold text-gray-800">
             {{ last_activity.tss|default(0)|round(1) if last_activity else '—' }}
         </span>
@@ -298,31 +344,39 @@ async function submitRpe(skip) {
         <div class="flex items-center space-x-4">
             <h2 id="chartTitle" class="text-lg font-bold text-gray-800 mb-2 sm:mb-0">Performance Management Chart</h2>
             <div class="flex bg-gray-100 p-1 rounded-lg">
-                <button onclick="setChartMode('pmc')" id="btnPmc" class="px-3 py-1 text-xs font-bold rounded-md bg-white shadow-sm text-gray-800 transition-all">PMC</button>
-                <button onclick="setChartMode('intensity')" id="btnIntensity" class="px-3 py-1 text-xs font-bold rounded-md text-gray-500 hover:text-gray-700 transition-all">Intensity</button>
+                <button onclick="setChartMode('pmc')" id="btnPmc"
+                    class="px-3 py-1 text-xs font-bold rounded-md bg-white shadow-sm text-gray-800 transition-all">PMC</button>
+                <button onclick="setChartMode('intensity')" id="btnIntensity"
+                    class="px-3 py-1 text-xs font-bold rounded-md text-gray-500 hover:text-gray-700 transition-all">Intensity</button>
             </div>
         </div>
         <div class="flex space-x-2 mt-4 sm:mt-0">
-            <button onclick="updateChartRange(30)" id="range30" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">1M</button>
-            <button onclick="updateChartRange(90)" id="range90" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-800 text-white hover:bg-gray-700 transition-colors">3M</button>
-            <button onclick="updateChartRange(180)" id="range180" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">6M</button>
-            <button onclick="updateChartRange(365)" id="range365" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">1Y</button>
-            <button onclick="updateChartRange(0)" id="range0" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">All</button>
+            <button onclick="updateChartRange(30)" id="range30"
+                class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">1M</button>
+            <button onclick="updateChartRange(90)" id="range90"
+                class="px-3 py-1 text-xs font-medium rounded-md bg-gray-800 text-white hover:bg-gray-700 transition-colors">3M</button>
+            <button onclick="updateChartRange(180)" id="range180"
+                class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">6M</button>
+            <button onclick="updateChartRange(365)" id="range365"
+                class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">1Y</button>
+            <button onclick="updateChartRange(0)" id="range0"
+                class="px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">All</button>
         </div>
     </div>
-    
+
     <!-- Manual Axis Labels above chart to avoid clipping on mobile -->
-    <div class="flex justify-between px-1 mb-1 text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-400">
+    <div
+        class="flex justify-between px-1 mb-1 text-[10px] md:text-xs font-bold uppercase tracking-widest text-gray-400">
         <span class="flex items-center">
-            <div id="leftLabelColor" class="w-2 h-2 rounded-full bg-blue-600 mr-1"></div> 
+            <div id="leftLabelColor" class="w-2 h-2 rounded-full bg-blue-600 mr-1"></div>
             <span id="leftLabelText">ATL / CTL</span>
         </span>
         <span class="flex items-center">
-            <span id="rightLabelText">TSB</span> 
+            <span id="rightLabelText">TSB</span>
             <div id="rightLabelColor" class="w-2 h-2 rounded-full bg-green-500 opacity-50 ml-1"></div>
         </span>
     </div>
-    
+
     <div class="relative w-full h-[300px] md:h-[500px]">
         <canvas id="pmcChart"></canvas>
     </div>
@@ -360,7 +414,7 @@ async function submitRpe(skip) {
         const leftLabelColor = document.getElementById('leftLabelColor');
         const rightLabelText = document.getElementById('rightLabelText');
         const rightLabelColor = document.getElementById('rightLabelColor');
-        
+
         if (mode === 'pmc') {
             btnPmc.className = "px-3 py-1 text-xs font-bold rounded-md bg-white shadow-sm text-gray-800 transition-all";
             btnIntensity.className = "px-3 py-1 text-xs font-bold rounded-md text-gray-500 hover:text-gray-700 transition-all";
@@ -378,7 +432,7 @@ async function submitRpe(skip) {
             rightLabelText.innerText = 'TSS';
             rightLabelColor.className = "w-2 h-2 rounded-full bg-blue-600 ml-1";
         }
-        
+
         if (fullData) renderChartData(filterData(fullData, currentDays));
     }
 
@@ -476,7 +530,7 @@ async function submitRpe(skip) {
         const history = dataToRender.ftp_history || [];
         const chartDates = dataToRender.dates;
         const annotations = {};
-        
+
         function getFtpForDate(d) {
             let current = dataToRender.ftp;
             for (let i = history.length - 1; i >= 0; i--) {
@@ -486,7 +540,7 @@ async function submitRpe(skip) {
         }
 
         // Calculate a reasonable max for the Y axis based on data
-        const maxP95 = dataToRender.p95 && dataToRender.p95.length > 0 
+        const maxP95 = dataToRender.p95 && dataToRender.p95.length > 0
             ? Math.max(...dataToRender.p95.filter(v => v !== null && v !== undefined), 0)
             : 0;
         const currentFtp = dataToRender.ftp;
@@ -536,7 +590,7 @@ async function submitRpe(skip) {
                 };
             });
         });
-        
+
         // Store displayMax in annotations as a trick to access it in renderChartData
         annotations._displayMax = displayMax;
         return annotations;
@@ -548,7 +602,7 @@ async function submitRpe(skip) {
             pmcChartInstance.destroy();
             pmcChartInstance = null;
         }
-        
+
         const datasets = currentMode === 'pmc' ? getPmcDatasets(dataToRender) : getIntensityDatasets(dataToRender);
         const annotations = getAnnotations(dataToRender);
         const displayMax = annotations._displayMax || (dataToRender.ftp ? dataToRender.ftp * 1.5 : 400);
@@ -591,7 +645,7 @@ async function submitRpe(skip) {
                         enabled: true,
                         position: 'nearest',
                         callbacks: {
-                            afterBody: function(context) {
+                            afterBody: function (context) {
                                 const i = context[0].dataIndex;
                                 let text = `\nDaily TSS: ${dataToRender.daily_tss[i]}`;
                                 if (currentMode === 'intensity' && dataToRender.p50[i]) {
@@ -612,7 +666,7 @@ async function submitRpe(skip) {
                             font: { size: window.innerWidth < 768 ? 10 : 12 },
                             maxRotation: 0,
                             minRotation: 0,
-                            callback: function(val, index) {
+                            callback: function (val, index) {
                                 const dateStr = dataToRender.dates[index];
                                 if (!dateStr) return '';
                                 const parts = dateStr.split('-');
@@ -681,7 +735,7 @@ async function submitRpe(skip) {
         fullData = await response.json();
         updateChartRange(currentDays);
     }
-    
+
     function updateChartRange(days) {
         currentDays = days;
         const buttons = document.querySelectorAll('button[onclick^="updateChartRange"]');
@@ -692,16 +746,20 @@ async function submitRpe(skip) {
                 btn.className = "px-3 py-1 text-xs font-medium rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors";
             }
         });
-        
+
         if (fullData) renderChartData(filterData(fullData, days));
     }
-    
+
     fetchChartData();
 
     // Load today's recommendation
-    async function loadRecommendation() {
+    async function loadRecommendation(type = null) {
         try {
-            const res = await fetch('/recommend/today');
+            let url = '/recommend/today';
+            if (type) {
+                url += `?type=${type}`;
+            }
+            const res = await fetch(url);
             if (!res.ok) return;
             const d = await res.json();
             const t = d.training;
@@ -716,22 +774,40 @@ async function submitRpe(skip) {
                 purple: 'border-purple-200 bg-purple-50',
             };
             const card = document.getElementById('recommendCard');
+            // Remove any previous color map classes to reset formatting
+            Object.values(colorMap).forEach(cls => {
+                cls.split(' ').forEach(c => card.classList.remove(c));
+            });
+            card.classList.add('border-gray-100');
+
             if (colorMap[t.color]) {
                 card.className = card.className.replace('border-gray-100', '') + ' border ' + colorMap[t.color];
             }
             document.getElementById('recommendEmoji').textContent = t.emoji;
-            document.getElementById('recommendLabel').textContent = t.label;
             document.getElementById('recommendDescription').textContent = t.description;
             document.getElementById('recommendDetails').textContent = t.details;
             document.getElementById('recommendDuration').textContent = t.duration;
             document.getElementById('recommendIntensity').textContent = t.intensity;
+            
+            const select = document.getElementById('recommendTypeSelect');
+            if (select) {
+                select.value = d.adjusted_type;
+            }
+
             const warning = document.getElementById('recommendWarning');
             if (d.warning) {
                 warning.textContent = d.warning;
                 warning.classList.remove('hidden');
+            } else {
+                warning.classList.add('hidden');
             }
         } catch(e) { console.error('Recommendation fetch failed', e); }
     }
+    
+    document.getElementById('recommendTypeSelect').addEventListener('change', (e) => {
+        loadRecommendation(e.target.value);
+    });
+
     loadRecommendation();
 </script>
 {% endblock %}
