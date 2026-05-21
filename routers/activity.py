@@ -267,16 +267,33 @@ async def evaluate_activity(request: Request, act_id: str):
     profile_key = act_data.get("profile_key")
     baseline = await get_historical_baseline(activities_ref, profile_key, act_id)
     
-    # 2. Get current TSB/CTL/ATL context
+    # 2. Get PRE-training TSB/CTL context
     pmc = user_data.get("pmc_history", [])
-    current_tsb = 0.0
-    current_ctl = 0.0
+    pre_training_tsb = 0.0
+    pre_training_ctl = 0.0
+    post_training_tsb = 0.0
     if pmc:
-        # Match the date of the activity to find TSB on that day
         act_date = act_data.get("date")
-        matching_day = next((day for day in pmc if day["date"] == act_date), pmc[-1])
-        current_tsb = matching_day.get("tsb", 0.0)
-        current_ctl = matching_day.get("ctl", 0.0)
+        target_idx = -1
+        for i, day in enumerate(pmc):
+            if day["date"] == act_date:
+                target_idx = i
+                break
+                
+        if target_idx > 0:
+            # Pre-training metrics come from the day before
+            pre_day = pmc[target_idx - 1]
+            pre_training_tsb = pre_day.get("tsb", 0.0)
+            pre_training_ctl = pre_day.get("ctl", 0.0)
+            post_training_tsb = pmc[target_idx].get("tsb", 0.0)
+        elif target_idx == 0:
+            pre_training_tsb = pmc[0].get("tsb", 0.0)
+            pre_training_ctl = pmc[0].get("ctl", 0.0)
+            post_training_tsb = pmc[0].get("tsb", 0.0)
+        else:
+            pre_training_tsb = pmc[-1].get("tsb", 0.0)
+            pre_training_ctl = pmc[-1].get("ctl", 0.0)
+            post_training_tsb = pmc[-1].get("tsb", 0.0)
         
     # 3. Build Prompt for AI personal coach
     metrics = act_data.get("metrics", {})
@@ -340,7 +357,7 @@ async def evaluate_activity(request: Request, act_id: str):
 - **データ同士の「掛け算」による複合メトリクス分析（最優先命令）**:
   - 各メトリクスを独立した単体データとして評価することを禁止します。必ず以下の「組み合わせ」から生理学的・神経学的なリアルな状態を推論してください。
     - **【IF (強度) × RPE (主観キツさ)】**: 例えば、IF値が高い（例: 0.80以上＝テンポ〜SST領域）にもかかわらずRPEが比較的低い（例: 4〜5程度）場合、それは「有酸素ベース能力が拡張され、中強度を楽に処理できている（ベースが伸び始めている）」という極めて良好な適応と判断すること。
-    - **【TSB (蓄積疲労) × 平均心拍・デカップリング (循環器) × 平均ケイデンス (神経系)】**: 例えば、TSBが大幅にマイナス（深い疲労下）であるにもかかわらず、心拍が安定し、かつ高ケイデンス（90rpm以上など）が崩れずに維持できている場合、「筋肉や心肺に疲労はあるが、ペダリング神経系が破綻せず、トルク頼みの踏み込みに逃げずに処理できている（疲労を良好に吸収できている、積める身体に近づいている）」と解釈すること。逆に、ケイデンスが落ちてトルク寄りになり、RPEが跳ね上がっている場合はオーバーロードと判定すること。
+    - **【ライド前TSB (開始前の疲労) × 平均心拍・デカップリング (循環器) × 平均ケイデンス (神経系)】**: 例えば、ライド前TSBが大幅にマイナス（深い疲労下でのスタート）であるにもかかわらず、心拍が安定し、かつ高ケイデンス（90rpm以上など）が崩れずに維持できている場合、「筋肉や心肺に疲労はあるが、ペダリング神経系が破綻せず、トルク頼みの踏み込みに逃げずに処理できている（疲労を良好に吸収できている、積める身体に近づいている）」と解釈すること。逆に、ケイデンスが落ちてトルク寄りになり、RPEが跳ね上がっている場合はオーバーロードと判定すること。
     - **【VI の実戦的解釈】**: ワークアウト（ERG制御）の時はVIが高くて当然（評価対象外）ですが、実走やフリーライドにおける適度なVI（1.08〜1.12など）は、単に「ペースが荒れている」と減点するのではなく「実戦的な集団走での加減速や踏み直しに身体が適応できている良好な兆候」と肯定的に解釈すること。
 - **測定誤差の意識（データサイエンス的評価）**: ケイデンス低下の微小な差（例: 2 rpm 未満の差）や、有酸素デカップリングの微小な差（例: 1.5% 未満の差）は、現実的には実質的な差がない「測定誤差・ノイズ」とみなすこと。「劇的な改善」などと過剰評価せず、「最初から最後までペダリングが極めて均一に安定していた」と冷静に評価してください。
 
@@ -356,8 +373,9 @@ async def evaluate_activity(request: Request, act_id: str):
 - ゾーン滞在時間 (Time in Zones): {tiz_str}
 
 【ユーザーの体調・コンディション】
-- 現在のフィットネス (CTL): {current_ctl}
-- 現在の疲労・TSB (トレーニングストレスバランス): {current_tsb}
+- ライド前のフィットネス (昨日のCTL): {pre_training_ctl}
+- ライド前の疲労・TSB (昨日のTSB): {pre_training_tsb}
+- ライド後のTSB (最新の疲労予測): {post_training_tsb}
 - {rpe_context}
 {history_context}
 
@@ -376,7 +394,7 @@ async def evaluate_activity(request: Request, act_id: str):
 【出力構成（マークダウン形式）】
 1. **ライドの総括とペーシング評価**: （VIやパワーから今日の狙い通りかを1〜2行で評価）
 2. **客観メトリクス解説**: （過去平均トレンドと比較した今日の成長や疲労状況。2〜3行の短い箇条書き）
-3. **主観RPEとTSBのギャップ分析**: （TSBと自己申告RPEのギャップから、身体の適応状況や隠れた疲労を1〜2行で鋭く分析）
+3. **主観RPEとライド前TSBのギャップ分析**: （ライド前の疲労度(TSB)と自己申告RPEのギャップから、身体の適応状況や隠れた疲労を1〜2行で鋭く分析。さらにライド後TSBを踏まえて現状を総括）
 4. **明日への具体的アドバイス**: （明日の具体的なリカバリーまたはトレーニングメニュー案を1〜2行で提案）
 """
 
