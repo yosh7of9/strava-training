@@ -6,6 +6,8 @@ from fastapi.responses import RedirectResponse
 from core.database import get_db
 from core.analyzer import ActivityAnalyzer
 
+JST = timezone(timedelta(hours=9))
+
 router = APIRouter(prefix="/sync", tags=["sync"])
 
 def calculate_tss(activity, ftp, max_hr):
@@ -55,7 +57,7 @@ async def initial_sync(request: Request):
     max_hr = user_data.get("max_hr", 190)
     
     # We fetch activities for the last 365 days (1 year)
-    start_date = datetime.now(timezone.utc) - timedelta(days=365)
+    start_date = datetime.now(JST) - timedelta(days=365)
     start_timestamp = int(start_date.timestamp())
     
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -97,7 +99,7 @@ async def initial_sync(request: Request):
     ctl = 0.0
     atl = 0.0
     
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(JST).date()
     current_date = start_date.date()
     pmc_history = []
     
@@ -194,7 +196,7 @@ async def sync_pmc_data(user_ref, user_data, target_date):
     }
 
     # Recalculate up to today (or target_date if that's later)
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(JST).date()
     final_date = max(today, target_date)
 
     # Fetch all activities for the gap/update period from Firestore
@@ -301,7 +303,7 @@ async def sync_latest(request: Request):
     
     async with httpx.AsyncClient() as client:
         for days in [10, 20, 30, 45]:
-            start_date_used = datetime.now(timezone.utc) - timedelta(days=days)
+            start_date_used = datetime.now(JST) - timedelta(days=days)
             start_ts = int(start_date_used.timestamp())
             url = f"https://www.strava.com/api/v3/athlete/activities?after={start_ts}&per_page=100"
             resp = await client.get(url, headers=headers)
@@ -374,7 +376,7 @@ async def sync_latest(request: Request):
             })
     
     # Recalculate PMC everything up to today
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(JST).date()
     await sync_pmc_data(user_ref, user_data, today)
     
     return RedirectResponse(url="/dashboard", status_code=303)
