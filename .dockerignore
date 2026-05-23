@@ -5,5 +5,9 @@ __pycache__/
 .git
 .gitignore
 README.md
-scratch.py
+scratch/
+experiments/
+test_metrics_comparison.py
 node_modules/
+test.py
+test.ipynb

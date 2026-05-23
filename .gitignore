@@ -5,3 +5,6 @@ __pycache__/
 allowed_users.txt
 .DS_Store
 node_modules/
+test.py
+test.ipynb
+
