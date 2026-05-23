@@ -543,7 +543,6 @@ async def evaluate_activity(request: Request, act_id: str):
 - 物理的仕事量 (Total Work):{metrics.get('total_work_kj')} kJ
 - 強度係数 (IF): {if_val}
 - 平均心拍 (走行中のみ):{metrics.get('average_heartrate_active')} bpm
-- ケイデンス低下: {f"{metrics.get('cadence_dropoff_rpm')} rpm" if metrics.get('cadence_dropoff_rpm') is not None else "データなし"}
 - マッチ消費数(120% FTPを15秒以上連続で超えた回数): {metrics.get('matches_burned')} 回
 - ゾーン滞在時間 (Time in Zones): {tiz_str}
 
@@ -584,20 +583,12 @@ async def evaluate_activity(request: Request, act_id: str):
 - 良い点と注意点を両方書く
 - 問題なければ「特になし」と明言する
 
-【出力形式】
-
-## ライド総括
-（今日のライドが身体に与えた刺激を1〜2行で）
-
-## 特に良かった点
-- （複合メトリクスから分かる身体適応）
-- （複合メトリクスから分かる身体適応）
-
-## 注意点・懸念
-- （問題なければ「特になし」でよい）
-
-## 次回へのヒント
-（次回このタイプをやる際の具体的改善を1行）
+【出力構成（マークダウン形式）】
+1. **ライド総括**: （今日のライドが身体に与えた刺激を1〜2行で）
+2. **アクティビティ内容**: (アクティビティ内容から期待されるトレーニング効果)
+3. **特に良かった点**: （複合メトリクスから分かる身体適応）
+4. **注意点・懸念**: （問題なければ「特になし」でよい）
+5. **次回へのヒント**: （次回このタイプをやる際の具体的改善を1行）
 """
 
     ai_feedback = await call_gemini_api(prompt)
