@@ -182,6 +182,38 @@ class ActivityAnalyzer:
         dropoff = avg_c2 - avg_c1
         return round(float(dropoff), 1)
 
+    def get_wbal_metrics(self, w_prime: int = 20000) -> dict:
+        """
+        Calculate W' balance (anaerobic battery) and return the max drop.
+        Uses the Skiba (2012) differential model.
+        """
+        if self.length == 0 or self.ftp <= 0:
+            return {"wbal_min": float(w_prime), "wbal_drop": 0.0}
+
+        w_bal = float(w_prime)
+        w_bal_history = []
+        cp = float(self.ftp)
+
+        for p in self.power:
+            if p > cp:
+                # Expenditure: Power above Critical Power (FTP)
+                w_bal -= (p - cp)
+            else:
+                # Recovery: Power below CP
+                d_cp = cp - p
+                tau_w = 546 * np.exp(-0.01 * d_cp) + 316
+                w_bal = w_prime - (w_prime - w_bal) * np.exp(-1 / tau_w)
+            
+            w_bal_history.append(w_bal)
+
+        min_wbal = min(w_bal_history)
+        wbal_drop = w_prime - min_wbal
+        
+        return {
+            "wbal_min": round(float(min_wbal), 0),
+            "wbal_drop": round(float(wbal_drop), 0)
+        }
+
     def get_profile_fingerprint(self, workout_type_id: int | None = None) -> str:
         """
         Generate a unique profile key for finding similar activities in NoSQL.
@@ -232,13 +264,29 @@ class ActivityAnalyzer:
         np_val = self.calculate_normalized_power(self.power)
         avg_power = np.mean(self.power) if self.length > 0 else 0
         
+        # Precise Work (kJ) = Sum of Watts / 1000
+        total_work_kj = np.sum(self.power) / 1000.0
+        
+        # Precise Averages (Filtered for active movement/pedaling)
+        moving_hr = self.hr[self.power > 10] # Filter for power > 10W to exclude rests
+        avg_hr_moving = np.mean(moving_hr) if len(moving_hr) > 0 else np.mean(self.hr)
+        
+        pedaling_cadence = self.cadence[self.cadence > 0]
+        avg_cadence_pedaling = np.mean(pedaling_cadence) if len(pedaling_cadence) > 0 else 0
+
+        wbal = self.get_wbal_metrics()
+        
         return {
             "average_power": round(float(avg_power), 1),
             "normalized_power": np_val,
+            "average_heartrate_active": round(float(avg_hr_moving), 1),
+            "average_cadence_pedaling": round(float(avg_cadence_pedaling), 1),
+            "total_work_kj": round(float(total_work_kj), 1),
             "variability_index": self.get_vi(),
             "aerobic_decoupling_pct": self.get_aerobic_decoupling(),
             "cadence_dropoff_rpm": self.get_cadence_dropoff(),
             "matches_burned": self.get_matches_burned(),
+            "wbal_drop_kj": round(wbal["wbal_drop"] / 1000, 1), # In kJ for easier reading
             "time_in_zones": self.get_time_in_zones(),
             "profile_key": self.get_profile_fingerprint(workout_type_id)
         }

@@ -10,17 +10,18 @@ JST = timezone(timedelta(hours=9))
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
-def calculate_tss(activity, ftp, max_hr):
+def calculate_tss(activity, ftp, max_hr, override_np=None):
     """
     Estimate TSS based on power, suffer score, or heart rate.
     """
     # Try power-based TSS
-    power = activity.get("weighted_average_power") or activity.get("average_watts")
+    # Use override_np if provided (from detailed stream analysis), otherwise fallback to Strava summary
+    power = override_np or activity.get("weighted_average_power") or activity.get("average_watts")
     moving_time = activity.get("moving_time", 0) # in seconds
     
     if power and ftp and ftp > 0:
-        intensity_factor = power / ftp
-        tss = (moving_time * power * intensity_factor) / (ftp * 3600) * 100
+        # TSS Formula: (sec * NP * (NP/FTP)) / (FTP * 3600) * 100
+        tss = (moving_time * (power ** 2)) / ((ftp ** 2) * 3600) * 100
         return max(0, tss)
     
     # Try Suffer Score (Strava's hrTSS)
@@ -141,7 +142,9 @@ async def initial_sync(request: Request):
             "start_date": start_date_iso,
             "tss": round(tss, 1),
             "type": act.get("type"),
-            "moving_time": act.get("moving_time", 0)
+            "moving_time": act.get("moving_time", 0),
+            "average_heartrate": act.get("average_heartrate"),
+            "average_cadence": act.get("average_cadence")
         })
     
     batch.commit()
@@ -353,12 +356,15 @@ async def sync_latest(request: Request):
 
             start_iso = act.get("start_date_local", act.get("start_date"))
             date_only = start_iso[:10]
-            tss = calculate_tss(act, ftp, max_hr)
             
             # Run ActivityAnalyzer
             analyzer = ActivityAnalyzer(watts_data, hr_data, cad_data, ftp=ftp)
             metrics = analyzer.analyze_all(workout_type_id=act.get("workout_type"))
             
+            # Calculate precise TSS using the NP from the analyzer
+            precise_np = metrics.get("normalized_power", 0)
+            tss = calculate_tss(act, ftp, max_hr, override_np=precise_np) if precise_np > 0 else calculate_tss(act, ftp, max_hr)
+
             user_ref.collection("activities").document(act_id).set({
                 "name": act.get("name"),
                 "date": date_only,

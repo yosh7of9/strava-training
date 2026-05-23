@@ -68,11 +68,12 @@ async def get_historical_baseline(activities_ref, profile_key, current_act_id, l
     ef_trend_vals = []
     decoupling_trend_vals = []
     cadence_trend_vals = []
+    wbal_trend_vals = []
     
     for act in trend_activities:
         m = act.get("metrics", {})
         np_val = m.get("normalized_power")
-        hr_val = act.get("average_heartrate")
+        hr_val = m.get("average_heartrate_active") or act.get("average_heartrate")
         if np_val and hr_val and hr_val > 0:
             ef_trend_vals.append(np_val / hr_val)
         
@@ -83,23 +84,30 @@ async def get_historical_baseline(activities_ref, profile_key, current_act_id, l
         cad = m.get("cadence_dropoff_rpm")
         if cad is not None:
             cadence_trend_vals.append(cad)
+
+        wbal = m.get("wbal_drop_kj")
+        if wbal is not None:
+            wbal_trend_vals.append(wbal)
             
     ef_slope = calculate_slope(ef_trend_vals)
     decoupling_slope = calculate_slope(decoupling_trend_vals)
     cadence_slope = calculate_slope(cadence_trend_vals)
+    wbal_slope = calculate_slope(wbal_trend_vals)
     
     # Calculate historical averages
-    avg_np = round(float(np.mean([m["normalized_power"] for m in past_metrics])), 1)
-    avg_vi = round(float(np.mean([m["variability_index"] for m in past_metrics])), 2)
+    avg_np = round(float(np.mean([m["normalized_power"] for m in past_metrics if m.get("normalized_power") is not None])), 1) if any(m.get("normalized_power") is not None for m in past_metrics) else None
+    avg_vi = round(float(np.mean([m["variability_index"] for m in past_metrics if m.get("variability_index") is not None])), 2) if any(m.get("variability_index") is not None for m in past_metrics) else None
     avg_decoupling = round(float(np.mean([m["aerobic_decoupling_pct"] for m in past_metrics if m.get("aerobic_decoupling_pct") is not None])), 2) if any(m.get("aerobic_decoupling_pct") is not None for m in past_metrics) else None
     avg_cadence_dropoff = round(float(np.mean([m["cadence_dropoff_rpm"] for m in past_metrics if m.get("cadence_dropoff_rpm") is not None])), 1) if any(m.get("cadence_dropoff_rpm") is not None for m in past_metrics) else None
+    avg_wbal_drop = round(float(np.mean([m["wbal_drop_kj"] for m in past_metrics if m.get("wbal_drop_kj") is not None])), 1) if any(m.get("wbal_drop_kj") is not None for m in past_metrics) else None
+    avg_cadence_active = round(float(np.mean([m["average_cadence_pedaling"] for m in past_metrics if m.get("average_cadence_pedaling") is not None])), 1) if any(m.get("average_cadence_pedaling") is not None for m in past_metrics) else None
     
     # Calculate historical EF averages
     past_efs = []
     for x in past_activities:
         m = x.get("metrics", {})
         np_val = m.get("normalized_power")
-        hr_val = x.get("average_heartrate")
+        hr_val = m.get("average_heartrate_active") or x.get("average_heartrate")
         if np_val and hr_val and hr_val > 0:
             past_efs.append(np_val / hr_val)
     avg_ef = round(float(np.mean(past_efs)), 2) if past_efs else None
@@ -110,9 +118,12 @@ async def get_historical_baseline(activities_ref, profile_key, current_act_id, l
         "avg_decoupling": avg_decoupling,
         "avg_cadence_dropoff": avg_cadence_dropoff,
         "avg_ef": avg_ef,
+        "avg_cadence_active": avg_cadence_active,
         "ef_slope": ef_slope,
         "decoupling_slope": decoupling_slope,
         "cadence_slope": cadence_slope,
+        "avg_wbal_drop": avg_wbal_drop,
+        "wbal_slope": wbal_slope,
         "count": len(past_activities)
     }
     return baseline
@@ -198,9 +209,10 @@ async def activity_detail(request: Request, act_id: str):
     if "metrics" not in act_data or not act_data["metrics"]:
         act_data["metrics"] = {}
         
-    # Calculate Efficiency Factor (EF) and Intensity Factor (IF) for the current activity
-    current_hr = act_data.get("average_heartrate")
-    current_np = act_data.get("metrics", {}).get("normalized_power")
+    metrics = act_data.get("metrics", {})
+    current_np = metrics.get("normalized_power")
+    current_hr = metrics.get("average_heartrate_active") or act_data.get("average_heartrate")
+
     if current_np and current_hr and current_hr > 0:
         act_data["metrics"]["efficiency_factor"] = round(current_np / current_hr, 2)
     else:
@@ -300,7 +312,7 @@ async def evaluate_activity(request: Request, act_id: str):
     tiz_str = ", ".join([f"{k}: {v}%" for k, v in metrics.get("time_in_zones", {}).items() if v > 0])
     
     # Calculate EF and IF for current activity
-    current_hr = act_data.get("average_heartrate")
+    current_hr = metrics.get("average_heartrate_active") or act_data.get("average_heartrate")
     current_np = metrics.get("normalized_power")
     current_ef = round(current_np / current_hr, 2) if current_np and current_hr and current_hr > 0 else None
     if_val = round(current_np / ftp, 2) if current_np and ftp and ftp > 0 else None
@@ -337,11 +349,23 @@ async def evaluate_activity(request: Request, act_id: str):
             else:
                 cad_trend_str = "安定・変化なし ➡️"
 
+        wbal_trend_str = "データ不足"
+        if baseline.get("wbal_slope") is not None:
+            slope = baseline["wbal_slope"]
+            if slope < -0.5:
+                wbal_trend_str = f"向上傾向（無駄脚の減少） 📈 ({round(slope, 1)} kJ/回)"
+            elif slope > 0.5:
+                wbal_trend_str = f"悪化傾向（パワーの荒れ） 📉 (+{round(slope, 1)} kJ/回)"
+            else:
+                wbal_trend_str = "安定 ➡️"
+
         history_context = f"""
 【過去の類似ライド({baseline['count']}件の平均ベースラインおよび直近5回以内の一次回帰トレンド)】
 - 有酸素効率 (EF = NP/HR): 今回 {current_ef if current_ef is not None else 'データなし'} (過去平均: {baseline['avg_ef'] if baseline['avg_ef'] is not None else 'データなし'}) -> 直近トレンド: {ef_trend_str}
 - 有酸素デカップリング (Drift): 今回 {metrics.get('aerobic_decoupling_pct', 'データなし')}% (過去平均: {baseline['avg_decoupling'] if baseline['avg_decoupling'] is not None else 'データなし'}%) -> 直近トレンド: {dec_trend_str}
 - ケイデンス低下 (Drop-off): 今回 {metrics.get('cadence_dropoff_rpm', 'データなし')} rpm (過去平均: {baseline['avg_cadence_dropoff'] if baseline['avg_cadence_dropoff'] is not None else 'データなし'} rpm) -> 直近トレンド: {cad_trend_str}
+- 平均ケイデンス (実走分): 今回 {metrics.get('average_cadence_pedaling', 'データなし')} rpm (過去平均: {baseline['avg_cadence_active'] if baseline['avg_cadence_active'] is not None else 'データなし'} rpm)
+- 無酸素消費 (W'bal Drop): 今回 {metrics.get('wbal_drop_kj', 'データなし')} kJ (過去平均: {baseline['avg_wbal_drop'] if baseline['avg_wbal_drop'] is not None else 'データなし'} kJ) -> 直近トレンド: {wbal_trend_str}
 - 参考情報 (過去平均の絶対出力): 平均NP {baseline['avg_np']} W, 平均VI {baseline['avg_vi']}
 
 ※注意※: パワーやNPの絶対値の増減のみでユーザーの体調や能力を判断してはいけません。今回の強度の意図（軽めのリカバリー走なのか、高強度のトレーニングなのか）を踏まえ、心拍あたりの出力効率を表す「有酸素効率 (EF)」や「デカップリング（Drift）」の数値と、それらの「直近の傾き（トレンド）」を見て、身体が効率的に適応しているか、または慢性疲労に陥っているかを総合的に判断・アドバイスしてください。
@@ -358,11 +382,18 @@ async def evaluate_activity(request: Request, act_id: str):
   - 各メトリクスを独立した単体データとして評価することを禁止します。必ず以下の「組み合わせ」から生理学的・神経学的なリアルな状態を推論してください。
     - **【IF (強度) × RPE (主観キツさ)】**: 例えば、IF値が高い（例: 0.80以上＝テンポ〜SST領域）にもかかわらずRPEが比較的低い（例: 4〜5程度）場合、それは「有酸素ベース能力が拡張され、中強度を楽に処理できている（ベースが伸び始めている）」という極めて良好な適応と判断すること。
     - **【ライド前TSB (開始前の疲労) × 平均心拍・デカップリング (循環器) × 平均ケイデンス (神経系)】**: 例えば、ライド前TSBが大幅にマイナス（深い疲労下でのスタート）であるにもかかわらず、心拍が安定し、かつ高ケイデンス（90rpm以上など）が崩れずに維持できている場合、「筋肉や心肺に疲労はあるが、ペダリング神経系が破綻せず、トルク頼みの踏み込みに逃げずに処理できている（疲労を良好に吸収できている、積める身体に近づいている）」と解釈すること。逆に、ケイデンスが落ちてトルク寄りになり、RPEが跳ね上がっている場合はオーバーロードと判定すること。
+    - **【W'bal Drop × 過去のベースライン × FTP設定】**: 今回の W'bal Drop を過去平均（avg_wbal_drop）と比較すること。ERGワークアウトで Drop が 0 を下回る（マイナスになる）場合は「FTP設定が低すぎる可能性」を、フリーライドで過去より Drop が大きい場合は「坂道や勝負所での追い込みの質、あるいはペーシングの乱れ」を分析すること。
     - **【VI の実戦的解釈】**: ワークアウト（ERG制御）の時はVIが高くて当然（評価対象外）ですが、実走やフリーライドにおける適度なVI（1.08〜1.12など）は、単に「ペースが荒れている」と減点するのではなく「実戦的な集団走での加減速や踏み直しに身体が適応できている良好な兆候」と肯定的に解釈すること。
 - **測定誤差の意識（データサイエンス的評価）**: ケイデンス低下の微小な差（例: 2 rpm 未満の差）や、有酸素デカップリングの微小な差（例: 1.5% 未満の差）は、現実的には実質的な差がない「測定誤差・ノイズ」とみなすこと。「劇的な改善」などと過剰評価せず、「最初から最後までペダリングが極めて均一に安定していた」と冷静に評価してください。
 
 【今回のライドデータ（追加指標）】
+- 物理的仕事量 (Total Work): {metrics.get('total_work_kj')} kJ
+- 有酸素効率 (EF): {current_ef} (NP/ActiveHR)
+- 強度係数 (IF): {if_val}
+- 平均心拍 (走行中のみ): {metrics.get('average_heartrate_active')} bpm
+- 平均ケイデンス (実走時): {metrics.get('average_cadence_pedaling')} rpm
 - ケイデンス低下（後半に脚がタレているため悪化。-5.0 rpm は -0.1 rpm よりも大幅に悪い）: {f"{metrics.get('cadence_dropoff_rpm')} rpm" if metrics.get('cadence_dropoff_rpm') is not None else "データなし"}
+- 無酸素バッテリー消費 (W'bal Drop): {metrics.get('wbal_drop_kj')} kJ
 - マッチ消費数 (120% FTPを15秒以上連続で超えた回数): {metrics.get('matches_burned')} 回
 - ゾーン滞在時間 (Time in Zones): {tiz_str}
 
@@ -382,20 +413,22 @@ async def evaluate_activity(request: Request, act_id: str):
   - 良い例: 「疲労下でも主観的に楽に踏めている」「高回転ペダリングが最後まで崩れなかった」「心拍ドリフトが抑えられ有酸素ベースが安定」
 - **測定誤差の意識**: ケイデンス低下 2rpm未満の差、デカップリング 1.5%未満の差は「測定誤差・ノイズ」とみなし、過剰評価しないこと。
 - **ライド種別に応じた分析指針**:
-  - **ワークアウト (ERGモード)**: VI評価は完全に無視（ERGでVIが高いのはシステム的に必然）。注視すべきはインターバル中のケイデンス維持力、デカップリング、IF達成度とRPEのギャップ。
+  - **ワークアウト (ERGモード)**: VI評価は無視。注視すべきはインターバル中のケイデンス維持力、デカップリング、および W'bal Drop が 0 を下回っていないか（FTP過小評価のチェック）。もし完遂しているのに過去より Drop が小さいなら、それは強度の低い別のワークアウトであるか、あるいはFTP設定が上がった可能性を示唆します。
   - **通常ライド (フリーライド/レース/グループライド)**: VI・自主ペース配分を重視。平坦エンデュランス走ならVI 1.00〜1.05の均一性、アップダウンなら無駄なマッチ消費の抑制を評価。
 
 【出力構成（マークダウン形式）】
 1. **ライドの総括とペーシング評価**: （今回のターゲット強度とペーシングの適切さを1〜2行でズバッと総括）
 2. **今回のライドで特に優れていた点**: （複合メトリクスの「掛け算」分析から導き出される具体的な発見を、自然言語タイトル付きで2〜3項目リストアップ）
 3. **注意すべき点・懸念される兆候**: （蓄積疲労やオーバーロードの兆候を具体的に。問題なければ「なし」と明言。1〜2項目）
-4. **明日のメニュー提案**: （以下のTSBベースの判断基準に従い、**具体的なワークアウト内容**を1〜2行で提案すること）
-   - 「完全休養しましょう」「アクティブリカバリーにしましょう」のような**思考停止の定型アドバイスを絶対に禁止**する。アスリートはそんなことは自分で判断できる。
-   - 代わりに、今のフィットネス状態と今日のライドの質から「今が伸ばし時の能力領域」を特定し、その能力を伸ばすための具体的メニューを提案すること。
-   - TSBベースの判断基準:
-     - **ライド後TSBが -30未満（深刻な疲労蓄積）**: 休養の必要性に言及しつつも、「回復後に取り組むべき次の課題」を具体的に示す（例: 「2日休んでからSSTインターバル 2x20min @ 88-92% FTPで有酸素天井を押し上げる」）
-     - **ライド後TSBが -30〜-10（通常のトレーニング疲労）**: 明日のメニューを具体的に提案（例: 「テンポ走 40min @ 76-80% FTP」「Vo2maxインターバル 5x3min @ 106-120% FTP」等。今回のライドで見えた伸びしろに対応するメニューを選ぶ）
-     - **ライド後TSBが -10以上（フレッシュ）**: 負荷を積むチャンスであることを示し、高強度メニューを提案
+4. **次回へのヒント**: （今回のライドデータに基づき、次回同種のライドで試すべき具体的な調整を**1行で**提案。以下の判断基準を参考にすること）
+   - **明日何をやるかの提案は不要**（それはトップページで別途行っている）。ここでは「このタイプのライドを次にやるとき、どう改善・調整すべきか」に絞ること。
+   - 提案の例:
+     - IF達成度が高くRPEに余裕がある場合 →「次回は目標パワーを3〜5%上げてみる価値あり」
+     - デカップリングが悪化している場合 →「次回は同じ強度で時間を10分短縮し、デカップリングを5%以内に抑えることを目標に」
+     - IF > 0.95が複数回続いている場合 →「FTPが上がっている可能性。FTPテストを検討」
+     - ケイデンスが後半大きく低下 →「次回は意識的にケイデンス90rpm以上を後半も維持するドリルを」
+     - 完璧に適応できている場合 →「現在の設定で順調に適応中。このまま継続」
+   - **毎回同じことを言う定型文（例: 毎回「3%上げましょう」）は禁止**。データが示す根拠に基づいた提案のみ行うこと。根拠がなければ「現状維持で問題なし」と言い切ること。
 """
 
     import os
@@ -432,4 +465,3 @@ async def mark_activity_as_read(act_id: str, request: Request):
         
     activity_ref.update({"is_new_activity": False})
     return JSONResponse(content={"success": True})
-

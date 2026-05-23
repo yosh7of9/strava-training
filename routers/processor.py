@@ -127,12 +127,15 @@ async def process_activity(request: Request):
             if "cadence" in streams:
                 cad_data = streams["cadence"]["data"]
     
-    # Calculate current activity TSS
-    tss = calculate_tss(activity, ftp, max_hr)
-    
     # Run ActivityAnalyzer
     analyzer = ActivityAnalyzer(watts_data, hr_data, cad_data, ftp=ftp)
     metrics = analyzer.analyze_all(workout_type_id=activity.get("workout_type"))
+    
+    # Calculate precise TSS using the NP from the analyzer
+    # calculate_tss logic uses (moving_time * NP * IF) / (FTP * 3600) * 100
+    # If NP is calculated from streams, it's more accurate than summary data
+    precise_np = metrics.get("normalized_power", 0)
+    tss = calculate_tss(activity, ftp, max_hr, override_np=precise_np) if precise_np > 0 else calculate_tss(activity, ftp, max_hr)
     
     # Save/Update this specific activity in its sub-collection
     start_date = activity.get("start_date_local", activity.get("start_date"))
