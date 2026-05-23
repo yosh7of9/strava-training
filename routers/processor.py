@@ -1,7 +1,6 @@
 import base64
 import json
 import httpx
-import numpy as np
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, Response, status
 from core.database import get_db

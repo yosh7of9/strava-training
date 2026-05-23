@@ -8,6 +8,9 @@ README.md
 scratch/
 experiments/
 test_metrics_comparison.py
+fill_zero_tss.py
+memo.py
 node_modules/
+Dockerfile
 test.py
 test.ipynb

@@ -317,7 +317,7 @@ async def evaluate_activity(request: Request, act_id: str):
     current_ef = round(current_np / current_hr, 2) if current_np and current_hr and current_hr > 0 else None
     if_val = round(current_np / ftp, 2) if current_np and ftp and ftp > 0 else None
     
-    history_context = ""
+    comp_performance = ""
     if baseline:
         ef_trend_str = "データ不足"
         if baseline.get("ef_slope") is not None:
@@ -359,79 +359,247 @@ async def evaluate_activity(request: Request, act_id: str):
             else:
                 wbal_trend_str = "安定 ➡️"
 
-        history_context = f"""
-【過去の類似ライド({baseline['count']}件の平均ベースラインおよび直近5回以内の一次回帰トレンド)】
-- 有酸素効率 (EF = NP/HR): 今回 {current_ef if current_ef is not None else 'データなし'} (過去平均: {baseline['avg_ef'] if baseline['avg_ef'] is not None else 'データなし'}) -> 直近トレンド: {ef_trend_str}
-- 有酸素デカップリング (Drift): 今回 {metrics.get('aerobic_decoupling_pct', 'データなし')}% (過去平均: {baseline['avg_decoupling'] if baseline['avg_decoupling'] is not None else 'データなし'}%) -> 直近トレンド: {dec_trend_str}
-- ケイデンス低下 (Drop-off): 今回 {metrics.get('cadence_dropoff_rpm', 'データなし')} rpm (過去平均: {baseline['avg_cadence_dropoff'] if baseline['avg_cadence_dropoff'] is not None else 'データなし'} rpm) -> 直近トレンド: {cad_trend_str}
-- 平均ケイデンス (実走分): 今回 {metrics.get('average_cadence_pedaling', 'データなし')} rpm (過去平均: {baseline['avg_cadence_active'] if baseline['avg_cadence_active'] is not None else 'データなし'} rpm)
-- 無酸素消費 (W'bal Drop): 今回 {metrics.get('wbal_drop_kj', 'データなし')} kJ (過去平均: {baseline['avg_wbal_drop'] if baseline['avg_wbal_drop'] is not None else 'データなし'} kJ) -> 直近トレンド: {wbal_trend_str}
-- 参考情報 (過去平均の絶対出力): 平均NP {baseline['avg_np']} W, 平均VI {baseline['avg_vi']}
+        comp_performance = f"""
+【パフォーマンス比較: 今回 vs 過去の類似ライド平均 ({baseline['count']}件)】
 
-※注意※: パワーやNPの絶対値の増減のみでユーザーの体調や能力を判断してはいけません。今回の強度の意図（軽めのリカバリー走なのか、高強度のトレーニングなのか）を踏まえ、心拍あたりの出力効率を表す「有酸素効率 (EF)」や「デカップリング（Drift）」の数値と、それらの「直近の傾き（トレンド）」を見て、身体が効率的に適応しているか、または慢性疲労に陥っているかを総合的に判断・アドバイスしてください。
+- 有酸素効率 (EF = NP / ActiveHR)
+  今回: {current_ef if current_ef is not None else 'データなし'}
+  過去平均: {baseline['avg_ef'] if baseline['avg_ef'] is not None else 'データなし'}
+  トレンド: {ef_trend_str}
+
+- 有酸素デカップリング (Drift)
+  今回: {metrics.get('aerobic_decoupling_pct', 'データなし')}%
+  過去平均: {baseline['avg_decoupling'] if baseline['avg_decoupling'] is not None else 'データなし'}%
+  トレンド: {dec_trend_str}
+
+- ケイデンス低下 (後半のタレ)
+  今回: {metrics.get('cadence_dropoff_rpm', 'データなし')} rpm
+  過去平均: {baseline['avg_cadence_dropoff'] if baseline['avg_cadence_dropoff'] is not None else 'データなし'} rpm
+  トレンド: {cad_trend_str}
+
+- 平均ケイデンス (実走時)
+  今回: {metrics.get('average_cadence_pedaling', 'データなし')} rpm
+  過去平均: {baseline['avg_cadence_active'] if baseline['avg_cadence_active'] is not None else 'データなし'} rpm
+
+- 無酸素バッテリー消費 (W'bal Drop)
+  今回: {metrics.get('wbal_drop_kj', 'データなし')} kJ
+  過去平均: {baseline['avg_wbal_drop'] if baseline['avg_wbal_drop'] is not None else 'データなし'} kJ
+  トレンド: {wbal_trend_str}
+
+- 参考情報:
+  平均NP {baseline['avg_np']} W
+  平均VI {baseline['avg_vi']}
 """
     else:
-        history_context = "\n【過去の類似ライド】\n比較可能な同条件の過去ライドはありません（今回が初回です）。\n"
+        comp_performance = f"""
+【今回のライド】\n比較可能な同条件の過去ライドはありません（今回が初回です）。
+
+- 有酸素効率 (EF = NP / ActiveHR)
+  今回: {current_ef if current_ef is not None else 'データなし'}
+
+- 有酸素デカップリング (Drift)
+  今回: {metrics.get('aerobic_decoupling_pct', 'データなし')}%
+
+- ケイデンス低下 (後半のタレ)
+  今回: {metrics.get('cadence_dropoff_rpm', 'データなし')} rpm
+
+- 平均ケイデンス (実走時)
+  今回: {metrics.get('average_cadence_pedaling', 'データなし')} rpm
+
+- 無酸素バッテリー消費 (W'bal Drop)
+  今回: {metrics.get('wbal_drop_kj', 'データなし')} kJ
+""" 
         
     rpe_context = f"ユーザーの自己申告キツさ (RPE, 1-10段階): {rpe_val if rpe_val is not None else 'スキップ（未申告）'}"
-    
-    prompt = f"""
-ユーザーから提供されたトレーニングデータを分析【制約事項（超重要・絶対遵守）】
-- 丁寧な挨拶、プロのコーチとしての形式的な前置き、退屈な一般論の長文解説は一切排除し、データが示す核心の結論から端的に書き始めてください。
-- **データ同士の「掛け算」による複合メトリクス分析（最優先命令）**:
-  - 各メトリクスを独立した単体データとして評価することを禁止します。必ず以下の「組み合わせ」から生理学的・神経学的なリアルな状態を推論してください。
-    - **【IF (強度) × RPE (主観キツさ)】**: 例えば、IF値が高い（例: 0.80以上＝テンポ〜SST領域）にもかかわらずRPEが比較的低い（例: 4〜5程度）場合、それは「有酸素ベース能力が拡張され、中強度を楽に処理できている（ベースが伸び始めている）」という極めて良好な適応と判断すること。
-    - **【ライド前TSB (開始前の疲労) × 平均心拍・デカップリング (循環器) × 平均ケイデンス (神経系)】**: 例えば、ライド前TSBが大幅にマイナス（深い疲労下でのスタート）であるにもかかわらず、心拍が安定し、かつ高ケイデンス（90rpm以上など）が崩れずに維持できている場合、「筋肉や心肺に疲労はあるが、ペダリング神経系が破綻せず、トルク頼みの踏み込みに逃げずに処理できている（疲労を良好に吸収できている、積める身体に近づいている）」と解釈すること。逆に、ケイデンスが落ちてトルク寄りになり、RPEが跳ね上がっている場合はオーバーロードと判定すること。
-    - **【W'bal Drop × 過去のベースライン × FTP設定】**: 今回の W'bal Drop を過去平均（avg_wbal_drop）と比較すること。ERGワークアウトで Drop が 0 を下回る（マイナスになる）場合は「FTP設定が低すぎる可能性」を、フリーライドで過去より Drop が大きい場合は「坂道や勝負所での追い込みの質、あるいはペーシングの乱れ」を分析すること。
-    - **【VI の実戦的解釈】**: ワークアウト（ERG制御）の時はVIが高くて当然（評価対象外）ですが、実走やフリーライドにおける適度なVI（1.08〜1.12など）は、単に「ペースが荒れている」と減点するのではなく「実戦的な集団走での加減速や踏み直しに身体が適応できている良好な兆候」と肯定的に解釈すること。
-- **測定誤差の意識（データサイエンス的評価）**: ケイデンス低下の微小な差（例: 2 rpm 未満の差）や、有酸素デカップリングの微小な差（例: 1.5% 未満の差）は、現実的には実質的な差がない「測定誤差・ノイズ」とみなすこと。「劇的な改善」などと過剰評価せず、「最初から最後までペダリングが極めて均一に安定していた」と冷静に評価してください。
 
-【今回のライドデータ（追加指標）】
-- 物理的仕事量 (Total Work): {metrics.get('total_work_kj')} kJ
-- 有酸素効率 (EF): {current_ef} (NP/ActiveHR)
-- 強度係数 (IF): {if_val}
-- 平均心拍 (走行中のみ): {metrics.get('average_heartrate_active')} bpm
-- 平均ケイデンス (実走時): {metrics.get('average_cadence_pedaling')} rpm
-- ケイデンス低下（後半に脚がタレているため悪化。-5.0 rpm は -0.1 rpm よりも大幅に悪い）: {f"{metrics.get('cadence_dropoff_rpm')} rpm" if metrics.get('cadence_dropoff_rpm') is not None else "データなし"}
-- 無酸素バッテリー消費 (W'bal Drop): {metrics.get('wbal_drop_kj')} kJ
-- マッチ消費数 (120% FTPを15秒以上連続で超えた回数): {metrics.get('matches_burned')} 回
-- ゾーン滞在時間 (Time in Zones): {tiz_str}
+    metrics_mean = """
+【各メトリクスの実戦的意味】
 
-【ユーザーの体調・コンディション】
-- ライド前のフィットネス (昨日のCTL): {pre_training_ctl}
-- ライド前の疲労・TSB (昨日のTSB): {pre_training_tsb}
-- ライド後のTSB (最新の疲労予測): {post_training_tsb}
-- {rpe_context}
-{history_context}
+■ EF (有酸素効率)
+- 心拍あたりどれだけ出力できているか
+- 高いほど「少ない心拍で大きな出力を維持できている」
+- EF上昇傾向は、有酸素適応やベース向上の可能性
+- ただし単独では判断しない
 
-【出力の制約事項（超重要・絶対遵守）】
-- 全体の文字数は **300文字〜500文字程度** に極めてコンパクトにまとめること。PCやスマホの1画面でスクロールせずに一目で要点が把握できるようにしてください。
-- 丁寧な挨拶、プロのコーチとしての前置き、無駄な長文解説は一切排除し、結論から端的に書き始めてください。
-- 各パート（1〜4）は **短い箇条書きを主体（それぞれ2〜3行以内）** とし、データが示す核心のみをズバッと提示すること。
-- **箇条書きの見出し（タイトル）は、メトリクス式名（IFxRPE、TSBxケイデンス等）を絶対に使わないこと**。代わりに、その項目が述べている生理学的な事実や発見を自然な日本語で要約したタイトルにすること。
-  - 悪い例: 「IFxRPE: TSBが-19にもかかわらず…」（タイトルがIF×RPEなのに中身はTSB×RPEの話で矛盾）
-  - 良い例: 「疲労下でも主観的に楽に踏めている」「高回転ペダリングが最後まで崩れなかった」「心拍ドリフトが抑えられ有酸素ベースが安定」
-- **測定誤差の意識**: ケイデンス低下 2rpm未満の差、デカップリング 1.5%未満の差は「測定誤差・ノイズ」とみなし、過剰評価しないこと。
-- **ライド種別に応じた分析指針**:
-  - **ワークアウト (ERGモード)**: VI評価は無視。注視すべきはインターバル中のケイデンス維持力、デカップリング、および W'bal Drop が 0 を下回っていないか（FTP過小評価のチェック）。もし完遂しているのに過去より Drop が小さいなら、それは強度の低い別のワークアウトであるか、あるいはFTP設定が上がった可能性を示唆します。
-  - **通常ライド (フリーライド/レース/グループライド)**: VI・自主ペース配分を重視。平坦エンデュランス走ならVI 1.00〜1.05の均一性、アップダウンなら無駄なマッチ消費の抑制を評価。
+■ デカップリング (Drift)
+- ライド後半で心拍効率がどれだけ崩れたか
+- <3%: 非常に良好〜正常範囲
+- 3〜5%: 通常範囲
+- >5%: 持久疲労・補給不足・暑熱・回復不足の可能性
+- 1.5%未満の差はノイズの可能性が高い
+- 単独で疲労判定しない
 
-【出力構成（マークダウン形式）】
-1. **ライドの総括とペーシング評価**: （今回のターゲット強度とペーシングの適切さを1〜2行でズバッと総括）
-2. **今回のライドで特に優れていた点**: （複合メトリクスの「掛け算」分析から導き出される具体的な発見を、自然言語タイトル付きで2〜3項目リストアップ）
-3. **注意すべき点・懸念される兆候**: （蓄積疲労やオーバーロードの兆候を具体的に。問題なければ「なし」と明言。1〜2項目）
-4. **次回へのヒント**: （今回のライドデータに基づき、次回同種のライドで試すべき具体的な調整を**1行で**提案。以下の判断基準を参考にすること）
-   - **明日何をやるかの提案は不要**（それはトップページで別途行っている）。ここでは「このタイプのライドを次にやるとき、どう改善・調整すべきか」に絞ること。
-   - 提案の例:
-     - IF達成度が高くRPEに余裕がある場合 →「次回は目標パワーを3〜5%上げてみる価値あり」
-     - デカップリングが悪化している場合 →「次回は同じ強度で時間を10分短縮し、デカップリングを5%以内に抑えることを目標に」
-     - IF > 0.95が複数回続いている場合 →「FTPが上がっている可能性。FTPテストを検討」
-     - ケイデンスが後半大きく低下 →「次回は意識的にケイデンス90rpm以上を後半も維持するドリルを」
-     - 完璧に適応できている場合 →「現在の設定で順調に適応中。このまま継続」
-   - **毎回同じことを言う定型文（例: 毎回「3%上げましょう」）は禁止**。データが示す根拠に基づいた提案のみ行うこと。根拠がなければ「現状維持で問題なし」と言い切ること。
+■ ケイデンス
+- 高疲労時は高回転維持が崩れ、トルク依存になりやすい
+- 85〜95rpm維持は神経系が安定している良好兆候
+- 後半に大きく落ちる場合、筋持久疲労の可能性
+- 2rpm未満の差はノイズの可能性
+
+■ W'bal Drop
+- FTP超過領域で「どれだけ脚を削ったか」
+- < 1 kJ
+  - ほぼ純有酸素
+  - steady endurance
+  - recovery/tempo寄り
+  - 「脚を削った感」かなり少ない
+- 1〜3 kJ
+  - 軽いsurgeあり
+  - 疲労コストまだ低い
+- 3〜6 kJ
+  - 明確に高強度寄与あり
+  - 神経筋疲労増える
+  - 翌日に少し残りやすい
+- 6〜10 kJ 
+  - race-like
+  - 無酸素寄与かなり大
+  - 「脚を使った感」が強い
+- >10 kJ
+  - 高強度連発
+  - 回復コスト大
+  - TSS以上に疲れる可能性
+- トレーニング内容を表し、単なる「疲労量」ではなく「疲労の種類」を見る指標
+
+■ VI
+- フリーライド:
+  - 1.00〜1.05: 極めて均一
+  - 1.05〜1.10: 実戦的で良好
+  - >1.15: 踏み直し過多
+- ERGワークアウト時のVIは評価対象外
+
+【超重要】
+- 単一メトリクスから断定しない
+- 数値を読み上げるのではなく「身体で何が起きたか」を推論すること
+- 微小差を過大評価しない
+- 「問題なし」という結論を積極的に許可する
+- 異常探しAIにならない
 """
 
-    import os
+    prompt = f"""
+あなたは、耐久スポーツの実戦経験を持つ高レベルコーチです。
+
+役割は「数値説明」ではありません。
+複数メトリクスの関係性から、
+
+- 今日どんな刺激が入ったか
+- 身体がどう反応したか
+- どんな能力が伸び始めているか
+- どんな疲労が発生したか
+- 今の状態で積めているか
+
+を推論してください。
+
+【最重要ルール】
+- 各メトリクスを単独評価してはいけない
+- 必ず複数メトリクスを関連付けて解釈する
+- 「異常探し」をしない
+- 正常範囲なら「良好」「問題なし」と言い切ってよい
+- 数値そのものではなく、生理学的意味を語ること
+- 良い適応が見えている場合は積極的に評価すること
+
+{metrics_mean}
+
+【複合メトリクス解釈ルール】
+
+■ IF × RPE
+- IF高めなのにRPE低:
+  有酸素ベース拡張・tempo/SST耐性向上の可能性
+- IF低いのにRPE高:
+  疲労・暑熱・回復不足の可能性
+
+■ TSB × 心拍 × デカップリング × ケイデンス
+- TSBマイナスでも:
+  - 心拍安定
+  - デカップリング低
+  - 高回転維持
+  が揃う場合:
+  「疲労を吸収しながら処理できている」
+  と解釈する
+
+- ケイデンス低下 + RPE上昇:
+  トルク依存・筋疲労優位の可能性
+
+■ W'bal Drop × VI × マッチ消費
+- W'bal Drop大:
+  レース的・神経筋的疲労
+- W'bal Drop小:
+  steady aerobic寄り
+
+- VI高 + W'bal Drop大:
+  踏み直し・加減速負荷が大きい
+
+- VI適度 + マッチ消費適量:
+  実戦的負荷への適応の可能性
+
+■ EF × デカップリング
+- EF良好 + デカップリング低:
+  有酸素効率安定
+- EF悪化 + デカップリング増:
+  持久疲労・回復不足・補給不足の可能性
+
+{comp_performance}
+
+【その他の今回のライドデータ】
+
+- 物理的仕事量 (Total Work):{metrics.get('total_work_kj')} kJ
+- 強度係数 (IF): {if_val}
+- 平均心拍 (走行中のみ):{metrics.get('average_heartrate_active')} bpm
+- ケイデンス低下: {f"{metrics.get('cadence_dropoff_rpm')} rpm" if metrics.get('cadence_dropoff_rpm') is not None else "データなし"}
+- マッチ消費数(120% FTPを15秒以上連続で超えた回数): {metrics.get('matches_burned')} 回
+- ゾーン滞在時間 (Time in Zones): {tiz_str}
+
+【コンディション】
+
+- ライド前CTL: {pre_training_ctl}
+- ライド前TSB: {pre_training_tsb}
+- ライド後TSB予測: {post_training_tsb}
+- {rpe_context}
+
+【ライド種別別ルール】
+
+■ ERGワークアウト
+- VIは無視
+- 注視点:
+  - ケイデンス維持
+  - IF達成度
+  - RPEとのギャップ
+  - デカップリング
+  - W'bal Drop
+
+- 高IFなのにW'bal Drop小:
+  FTP設定が低い可能性も考慮
+
+■ フリーライド / 実走
+- VI・W'bal Drop・マッチ消費を重視
+- 適度なVIは実戦適応として肯定的に解釈
+- 「ペースが荒い」だけで減点しない
+
+【出力ルール】
+
+- 300〜500文字
+- 結論から書く
+- 挨拶禁止
+- 無駄な一般論禁止
+- 数値の音読禁止
+- 「身体で何が起きたか」を説明する
+- 良い点と注意点を両方書く
+- 問題なければ「特になし」と明言する
+
+【出力形式】
+
+## ライド総括
+（今日のライドが身体に与えた刺激を1〜2行で）
+
+## 特に良かった点
+- （複合メトリクスから分かる身体適応）
+- （複合メトリクスから分かる身体適応）
+
+## 注意点・懸念
+- （問題なければ「特になし」でよい）
+
+## 次回へのヒント
+（次回このタイプをやる際の具体的改善を1行）
+"""
+
     ai_feedback = await call_gemini_api(prompt)
     
     # 4. Save to Firestore
