@@ -25,6 +25,11 @@
             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-50 text-strava uppercase tracking-wider mb-1.5">
                 {{ activity.type }}
             </span>
+            {% if is_workout %}
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-white text-[11px] font-extrabold bg-gradient-to-r from-red-500 to-pink-500 shadow-sm">
+                💪 ERG
+            </span>
+            {% endif %}
             <h1 class="text-xl md:text-2xl font-extrabold text-gray-900 tracking-tight leading-tight">{{ activity.name }}</h1>
             <p class="text-xs text-gray-400 mt-0.5 flex items-center">
                 <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>

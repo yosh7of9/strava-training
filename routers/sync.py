@@ -330,7 +330,8 @@ async def sync_latest(request: Request):
     # Get IDs for the search period to avoid re-fetching unchanged activities
     existing_acts = user_ref.collection("activities").where("date", ">=", start_date_used.strftime("%Y-%m-%d")).get()
     existing_ids = {doc.id for doc in existing_acts}
-    latest_act_id = str(activities[0]["id"]) if activities else None
+    latest_act_id = str( max([(act['id'], act['start_date']) for act in activities], key=lambda x: x[1])[0]
+                      if len(activities) > 0 else None )
 
     async with httpx.AsyncClient() as client:
         for act in activities:
@@ -359,11 +360,21 @@ async def sync_latest(request: Request):
             
             # Run ActivityAnalyzer
             analyzer = ActivityAnalyzer(watts_data, hr_data, cad_data, ftp=ftp)
-            metrics = analyzer.analyze_all(workout_type_id=act.get("workout_type"))
+            metrics = analyzer.analyze_all(act_type=act.get("type"))
             
             # Calculate precise TSS using the NP from the analyzer
             precise_np = metrics.get("normalized_power", 0)
             tss = calculate_tss(act, ftp, max_hr, override_np=precise_np) if precise_np > 0 else calculate_tss(act, ftp, max_hr)
+
+            existing_doc = user_ref.collection("activities").document(act_id).get()
+            existing_data = existing_doc.to_dict() if existing_doc.exists else {}
+
+            # 既存の ai_feedback と rpe を保持
+            preserve_fields = {
+                k: v for k, v in existing_data.items() 
+                if k in ["ai_feedback", "rpe"]
+            }
+            is_new_activity = False if 'ai_feedback' in preserve_fields else True
 
             user_ref.collection("activities").document(act_id).set({
                 "name": act.get("name"),
@@ -377,8 +388,9 @@ async def sync_latest(request: Request):
                 "watts_data": watts_data,
                 "metrics": metrics,
                 "profile_key": metrics.get("profile_key"),
-                "is_new_activity": True,
-                "synced_at": datetime.now(timezone.utc).isoformat()
+                "is_new_activity": is_new_activity,
+                "synced_at": datetime.now(timezone.utc).isoformat(),
+                **preserve_fields  # ← 既存の ai_feedback と rpe を保持                
             })
     
     # Recalculate PMC everything up to today

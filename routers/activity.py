@@ -231,7 +231,7 @@ async def activity_detail(request: Request, act_id: str):
         acts_ref = db.collection("users").document(user_id).collection("activities")
         baseline = await get_historical_baseline(acts_ref, act_data["profile_key"], act_id)
         
-    is_workout = "workout" in act_data.get("name", "").lower() or "ワークアウト" in act_data.get("name", "").lower() or act_data.get("workout_type") == 3
+    is_workout = act_data["metrics"].get("activity_type") == "Workout" or "Workout" in act_data.get("profile_key")
         
     return templates.TemplateResponse(
         request=request, name="activity_detail.html", context={
@@ -247,8 +247,10 @@ async def activity_detail(request: Request, act_id: str):
 async def evaluate_activity(request: Request, act_id: str):
     user_id = request.session.get("user_id")
     if not user_id:
+        print(f"❌ [EVALUATE] No user_id in session")
         return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content={"error": "Unauthorized"})
-        
+    
+    print(f"📋 [EVALUATE] Starting for user_id={user_id}, act_id={act_id}")
     # Get JSON payload
     try:
         payload = await request.json()
@@ -256,6 +258,7 @@ async def evaluate_activity(request: Request, act_id: str):
     except Exception:
         # Fallback to Form Data if needed
         rpe = None
+        print(f"⚠️  [EVALUATE] Failed to parse JSON: {e}")
         
     db = get_db()
     user_ref = db.collection("users").document(user_id)
@@ -265,12 +268,14 @@ async def evaluate_activity(request: Request, act_id: str):
     activities_ref = user_ref.collection("activities")
     act_doc = activities_ref.document(act_id).get()
     if not act_doc.exists:
+        print(f"❌ [EVALUATE] Activity not found: {act_id}")
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "Activity not found"})
         
     act_data = act_doc.to_dict()
+    print(f"✅ [EVALUATE] Activity loaded: {act_data.get('name')}")
     ftp = user_data.get("ftp", 200)
-    is_workout = "workout" in act_data.get("name", "").lower() or "ワークアウト" in act_data.get("name", "").lower() or act_data.get("workout_type") == 3
-    workout_type_str = "ワークアウト (ERGモード自動制御)" if is_workout else "通常のライド (フリーライド / レース / グループライド等、自主的ペーシング)"
+    is_workout = act_data["metrics"].get("activity_type") == "Workout" or "Workout" in act_data.get("profile_key")
+    workout_type_str = "ERGワークアウト" if is_workout else "通常のライド (フリーライド / レース / グループライド等、自主的ペーシング)"
     
     # RPE conversion (ensure it's int or None)
     rpe_val = int(rpe) if rpe is not None and str(rpe).isdigit() else None
@@ -415,6 +420,15 @@ async def evaluate_activity(request: Request, act_id: str):
     metrics_mean = """
 【各メトリクスの実戦的意味】
 
+■ TSB (Training Stress Balance)
+- 「その日のフレッシュさ」を示す指標。マイナスほど疲労蓄積、プラスほど回復状態
+- 持久系トレーニングでは、適度なマイナスTSBの中で継続的に負荷を積むことが一般的
+- +10 以上: 非常にフレッシュ。レース向き。継続すると刺激不足の可能性
+- 0 ～ -10: 軽い疲労。通常のトレーニングに適した範囲
+- -10 ～ -25: しっかり負荷を積んでいる状態。計画的トレーニングとしては正常範囲
+- -25 ～ -40: 深い疲労領域。高強度継続時はオーバーリーチの可能性
+- -40 以下: 回復不足や機能低下リスク
+
 ■ EF (有酸素効率)
 - 心拍あたりどれだけ出力できているか
 - 高いほど「少ない心拍で大きな出力を維持できている」
@@ -436,6 +450,7 @@ async def evaluate_activity(request: Request, act_id: str):
 - 2rpm未満の差はノイズの可能性
 
 ■ W'bal Drop
+- アクティビティ内容で決まる指標
 - FTP超過領域で「どれだけ脚を削ったか」
 - < 1 kJ
   - ほぼ純有酸素
@@ -457,10 +472,10 @@ async def evaluate_activity(request: Request, act_id: str):
   - 高強度連発
   - 回復コスト大
   - TSS以上に疲れる可能性
-- トレーニング内容を表し、単なる「疲労量」ではなく「疲労の種類」を見る指標
+- 単なる「疲労量」ではなく「疲労の種類」を見る指標
 
 ■ VI
-- フリーライド:
+- 通常のライド:
   - 1.00〜1.05: 極めて均一
   - 1.05〜1.10: 実戦的で良好
   - >1.15: 踏み直し過多
@@ -490,11 +505,12 @@ async def evaluate_activity(request: Request, act_id: str):
 
 【最重要ルール】
 - 各メトリクスを単独評価してはいけない
+- 数値そのものではなく、生理学的意味を語ること
 - 必ず複数メトリクスを関連付けて解釈する
 - 「異常探し」をしない
 - 正常範囲なら「良好」「問題なし」と言い切ってよい
-- 数値そのものではなく、生理学的意味を語ること
 - 良い適応が見えている場合は積極的に評価すること
+- ライドの内容は、IFやTotal Workだけでなく、ゾーン滞在時間も加味して判断すること
 
 {metrics_mean}
 
@@ -539,7 +555,7 @@ async def evaluate_activity(request: Request, act_id: str):
 {comp_performance}
 
 【その他の今回のライドデータ】
-
+- ライドのタイプ: {workout_type_str}
 - 物理的仕事量 (Total Work):{metrics.get('total_work_kj')} kJ
 - 強度係数 (IF): {if_val}
 - 平均心拍 (走行中のみ):{metrics.get('average_heartrate_active')} bpm
@@ -567,7 +583,7 @@ async def evaluate_activity(request: Request, act_id: str):
 - 高IFなのにW'bal Drop小:
   FTP設定が低い可能性も考慮
 
-■ フリーライド / 実走
+■ 通常のライド
 - VI・W'bal Drop・マッチ消費を重視
 - 適度なVIは実戦適応として肯定的に解釈
 - 「ペースが荒い」だけで減点しない
@@ -592,7 +608,8 @@ async def evaluate_activity(request: Request, act_id: str):
 """
 
     ai_feedback = await call_gemini_api(prompt)
-    
+    print(f"✅ [EVALUATE] Gemini returned {len(ai_feedback)} chars")
+
     # 4. Save to Firestore
     update_payload = {
         "ai_feedback": ai_feedback,
@@ -600,9 +617,34 @@ async def evaluate_activity(request: Request, act_id: str):
     }
     if rpe_val is not None:
         update_payload["rpe"] = rpe_val
+
+    print(f"🔄 [EVALUATE] Attempting Firestore update...")
+    print(f"   Document path: users/{user_id}/activities/{act_id}")
+    print(f"   Payload keys: {list(update_payload.keys())}")
+    print(f"   ai_feedback length: {len(ai_feedback)}")
+
+    try:
+        activities_ref.document(act_id).update(update_payload)
+        print(f"✅ [EVALUATE] Successfully updated Firestore")
+    except Exception as e:
+        print(f"❌ [EVALUATE] Firestore update FAILED")
+        print(f"   Error type: {type(e).__name__}")
+        print(f"   Error message: {str(e)}")
+        import traceback
+        traceback.print_exc()
         
-    activities_ref.document(act_id).update(update_payload)
+        # ここで重要な情報を返す
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "success": False,
+                "error": str(e),
+                "ai_feedback": ai_feedback  # とりあえず表示用に返す
+            }
+        )
     
+    print(f"✅ [EVALUATE] Complete")
+
     return JSONResponse(content={
         "success": True,
         "rpe": rpe_val,

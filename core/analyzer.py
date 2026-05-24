@@ -25,6 +25,23 @@ class ActivityAnalyzer:
         np_val = np.mean(rolling_avg ** 4) ** 0.25
         return round(float(np_val), 1)
 
+    def guess_workout(self) -> float:
+        """ ERGつきワークアウトならパワー変動が極端に小さいはず。それを検出してERGワークアウト判定
+        """
+        dat = np.array([v for v in self.power if v > 0])
+        offset = (15 * 60) if len(dat) > (40 * 60) else int(len(dat)*.4)
+        dat = dat[offset:(-offset)] # 真ん中の区間だけ抽出
+        print("系列長＝", len(dat))
+        dat = np.abs(np.diff(dat))
+        if len(dat) <= 300:
+            r = np.std(dat)
+        else:
+            d = np.convolve(dat, np.ones(300), mode='valid')
+            i = np.argmin(d)
+            r = np.std(dat[i:(i+300)])
+        print("power diff std: ", r)
+        return  r< 3
+
     def get_vi(self) -> float:
         """Variability Index: NP / Average Power"""
         avg_power = np.mean(self.power)
@@ -101,6 +118,27 @@ class ActivityAnalyzer:
                 return i + window
                 
         return max_search_sec
+    
+    def _estimate_cooldown_duration(self, max_search_min=30) -> int:
+        """
+        Estimate cooldown duration by finding the first time the 60-second moving average 
+        berow 65% of FTP.
+        Returns duration in seconds.
+        """
+        if self.length < 60:
+            return 0
+            
+        threshold = self.ftp * 0.65
+        window = 60
+        rolling_avg = np.convolve(self.power[::-1], np.ones(window)/window, mode='valid')
+        
+        max_search_sec = min(max_search_min * 60, len(rolling_avg))
+        
+        for i in range(max_search_sec):
+            if rolling_avg[i] >= threshold:
+                return i + window
+                
+        return max_search_sec
 
     def get_aerobic_decoupling(self, exclude_edges=True) -> float | None:
         """
@@ -121,7 +159,8 @@ class ActivityAnalyzer:
             estimated_wu = self._estimate_warmup_duration()
             # Use the longer of estimated warmup or 15 minutes (900 seconds)
             wu_cut = max(estimated_wu, 900)
-            cd_cut = 300 # 5 mins
+            estimated_cd = self._estimate_cooldown_duration()
+            cd_cut = max(estimated_cd, 300)
             
             # Sanity check: If ride is too short to cut that much, fallback to proportional
             if wu_cut + cd_cut >= self.length * 0.7:
@@ -214,7 +253,15 @@ class ActivityAnalyzer:
             "wbal_drop": round(float(wbal_drop), 0)
         }
 
-    def get_profile_fingerprint(self, workout_type_id: int | None = None) -> str:
+    def judge_activity_type(self, act_type: str) -> str:
+        if act_type != 'VirtualRide':
+            return 'Ride'
+        elif self.guess_workout():
+            return 'Workout'
+        else:
+            return 'GroupRide'
+        
+    def get_profile_fingerprint(self, act_type: str) -> str:
         """
         Generate a unique profile key for finding similar activities in NoSQL.
         Format: {Format}_{Duration}_{Pacing}_{DominantZone}
@@ -225,9 +272,9 @@ class ActivityAnalyzer:
             
         # 1. Format
         fmt = "FreeRide"
-        if workout_type_id == 10:
+        if act_type == "Workout":
             fmt = "Workout"
-        elif workout_type_id == 11:
+        elif act_type == "GroupRide":
             fmt = "Race"
             
         # 2. Duration
@@ -259,7 +306,7 @@ class ActivityAnalyzer:
                 
         return f"{fmt}_{dur}_{pac}_{dominant_zone}"
 
-    def analyze_all(self, workout_type_id: int | None = None) -> dict:
+    def analyze_all(self, act_type: str = '') -> dict:
         """Run all analyses and return a summary dictionary."""
         np_val = self.calculate_normalized_power(self.power)
         avg_power = np.mean(self.power) if self.length > 0 else 0
@@ -275,7 +322,7 @@ class ActivityAnalyzer:
         avg_cadence_pedaling = np.mean(pedaling_cadence) if len(pedaling_cadence) > 0 else 0
 
         wbal = self.get_wbal_metrics()
-        
+        activity_type = self.judge_activity_type(act_type)
         return {
             "average_power": round(float(avg_power), 1),
             "normalized_power": np_val,
@@ -288,5 +335,6 @@ class ActivityAnalyzer:
             "matches_burned": self.get_matches_burned(),
             "wbal_drop_kj": round(wbal["wbal_drop"] / 1000, 1), # In kJ for easier reading
             "time_in_zones": self.get_time_in_zones(),
-            "profile_key": self.get_profile_fingerprint(workout_type_id)
+            "profile_key": self.get_profile_fingerprint(activity_type),
+            "activity_type": activity_type
         }

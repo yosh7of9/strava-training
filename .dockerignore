@@ -10,6 +10,7 @@ experiments/
 test_metrics_comparison.py
 fill_zero_tss.py
 memo.py
+memo.txt
 node_modules/
 Dockerfile
 test.py

@@ -128,7 +128,7 @@ async def process_activity(request: Request):
     
     # Run ActivityAnalyzer
     analyzer = ActivityAnalyzer(watts_data, hr_data, cad_data, ftp=ftp)
-    metrics = analyzer.analyze_all(workout_type_id=activity.get("workout_type"))
+    metrics = analyzer.analyze_all(act_type=activity.get("type"))
     
     # Calculate precise TSS using the NP from the analyzer
     # calculate_tss logic uses (moving_time * NP * IF) / (FTP * 3600) * 100
