@@ -152,6 +152,7 @@ async def process_activity(request: Request):
         "metrics": metrics,
         "profile_key": metrics.get("profile_key"),
         "is_new_activity": True,
+        "report_status": "pending",
         "synced_at": datetime.now(timezone.utc).isoformat()
     })
     

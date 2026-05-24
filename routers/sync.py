@@ -296,7 +296,10 @@ async def sync_latest(request: Request):
     activities_ref = user_ref.collection("activities")
     outstanding_new = activities_ref.where("is_new_activity", "==", True).get()
     for doc in outstanding_new:
-        doc.reference.update({"is_new_activity": False})
+        doc.reference.update({
+            "is_new_activity": False,
+            "report_status": "acknowledged"
+        })
 
     
     # Step-wise search: 10 days -> 20 days -> 30 days -> 45 days

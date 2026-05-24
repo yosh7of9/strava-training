@@ -76,7 +76,7 @@
 {% block content %}
 <!-- Dashboard Header Removed (Redundant) -->
 
-{% if latest_activity and latest_activity.ai_feedback and latest_activity.is_new_activity %}
+{% if show_report and latest_activity and latest_activity.ai_feedback %}
 <!-- AI Coaching Report -->
 <div
     class="bg-white rounded-xl shadow-sm border border-blue-100 p-4 md:p-6 w-full mb-6 md:mb-8 bg-gradient-to-r from-blue-50/20 to-indigo-50/20">

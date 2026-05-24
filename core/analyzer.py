@@ -31,7 +31,6 @@ class ActivityAnalyzer:
         dat = np.array([v for v in self.power if v > 0])
         offset = (15 * 60) if len(dat) > (40 * 60) else int(len(dat)*.4)
         dat = dat[offset:(-offset)] # 真ん中の区間だけ抽出
-        print("系列長＝", len(dat))
         dat = np.abs(np.diff(dat))
         if len(dat) <= 300:
             r = np.std(dat)
@@ -39,7 +38,6 @@ class ActivityAnalyzer:
             d = np.convolve(dat, np.ones(300), mode='valid')
             i = np.argmin(d)
             r = np.std(dat[i:(i+300)])
-        print("power diff std: ", r)
         return  r< 3
 
     def get_vi(self) -> float:

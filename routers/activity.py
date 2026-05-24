@@ -608,24 +608,18 @@ async def evaluate_activity(request: Request, act_id: str):
 """
 
     ai_feedback = await call_gemini_api(prompt)
-    print(f"✅ [EVALUATE] Gemini returned {len(ai_feedback)} chars")
 
     # 4. Save to Firestore
     update_payload = {
         "ai_feedback": ai_feedback,
-        "is_new_activity": True
+        "report_status": "generated",
+        "is_new_activity": False
     }
     if rpe_val is not None:
         update_payload["rpe"] = rpe_val
 
-    print(f"🔄 [EVALUATE] Attempting Firestore update...")
-    print(f"   Document path: users/{user_id}/activities/{act_id}")
-    print(f"   Payload keys: {list(update_payload.keys())}")
-    print(f"   ai_feedback length: {len(ai_feedback)}")
-
     try:
         activities_ref.document(act_id).update(update_payload)
-        print(f"✅ [EVALUATE] Successfully updated Firestore")
     except Exception as e:
         print(f"❌ [EVALUATE] Firestore update FAILED")
         print(f"   Error type: {type(e).__name__}")
@@ -642,8 +636,6 @@ async def evaluate_activity(request: Request, act_id: str):
                 "ai_feedback": ai_feedback  # とりあえず表示用に返す
             }
         )
-    
-    print(f"✅ [EVALUATE] Complete")
 
     return JSONResponse(content={
         "success": True,
@@ -664,5 +656,5 @@ async def mark_activity_as_read(act_id: str, request: Request):
     if not activity_doc.exists:
         return JSONResponse(content={"success": False, "error": "Activity not found"}, status_code=404)
         
-    activity_ref.update({"is_new_activity": False})
+    activity_ref.update({"report_status": "acknowledged"})
     return JSONResponse(content={"success": True})

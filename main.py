@@ -39,6 +39,23 @@ async def read_root(request: Request):
         request=request, name="index.html", context={"title": "Strava Dashboard"}
     )
 
+def get_report_status(activity_data):
+    """
+    Determine report status with backward compatibility.
+    Priority: report_status (new) > inferred from ai_feedback (legacy)
+    Returns: "pending" | "generated" | "acknowledged"
+    """
+    if "report_status" in activity_data:
+        return activity_data["report_status"]
+    
+    if activity_data.get("ai_feedback"):
+        if activity_data.get("is_new_activity") is True:
+            return "generated"
+        else:
+            return "acknowledged"
+    
+    return "pending"
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
     user_id = request.session.get("user_id")
@@ -93,6 +110,7 @@ async def dashboard(request: Request):
     latest_act_query = activities_ref.order_by("start_date", direction=firestore.Query.DESCENDING).limit(1).get()
     latest_activity_data = None
     is_new_activity = False
+    show_report = False
     new_activity_id = None
     
     if latest_act_query:
@@ -100,11 +118,16 @@ async def dashboard(request: Request):
         latest_activity_data = latest_doc.to_dict()
         latest_activity_data["id"] = latest_doc.id
         
+        report_status = get_report_status(latest_activity_data)
+
         # Check if it needs RPE popup (only show if is_new_activity is True AND rpe has not been set yet)
         if latest_activity_data.get("is_new_activity") is True and latest_activity_data.get("rpe") is None:
             is_new_activity = True
             new_activity_id = latest_doc.id
-            
+
+        if report_status == "generated" and latest_activity_data.get("ai_feedback"):
+            show_report = True
+
     return templates.TemplateResponse(
         request=request, name="dashboard.html", context={
             "title": "My Dashboard", 
@@ -112,6 +135,7 @@ async def dashboard(request: Request):
             "last_activity": last_activity,
             "latest_activity": latest_activity_data,
             "is_new_activity": is_new_activity,
+            "show_report": show_report,
             "new_activity_id": new_activity_id
         }
     )
