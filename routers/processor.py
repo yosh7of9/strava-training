@@ -139,6 +139,26 @@ async def process_activity(request: Request):
     # Save/Update this specific activity in its sub-collection
     start_date = activity.get("start_date_local", activity.get("start_date"))
     activity_ref = user_ref.collection("activities").document(str(activity_id))
+    
+    # 既存の活動データがある場合は評価フィールドを保持する
+    existing_doc = activity_ref.get()
+    existing_data = existing_doc.to_dict() if existing_doc.exists else {}
+    
+    preserve_fields = {
+        k: v for k, v in existing_data.items()
+        if k in ["ai_feedback", "rpe", "report_status", "is_new_activity"]
+    }
+    
+    is_new_activity = preserve_fields.get("is_new_activity", True)
+    if "ai_feedback" in preserve_fields:
+        is_new_activity = False
+        
+    report_status = preserve_fields.get("report_status", "pending")
+    
+    # payloadでの重複指定を避けるため除外
+    preserve_fields.pop("is_new_activity", None)
+    preserve_fields.pop("report_status", None)
+
     activity_ref.set({
         "name": activity.get("name"),
         "date": activity_date,
@@ -151,9 +171,10 @@ async def process_activity(request: Request):
         "watts_data": watts_data, # Store for re-calculation if needed
         "metrics": metrics,
         "profile_key": metrics.get("profile_key"),
-        "is_new_activity": True,
-        "report_status": "pending",
-        "synced_at": datetime.now(timezone.utc).isoformat()
+        "is_new_activity": is_new_activity,
+        "report_status": report_status,
+        "synced_at": datetime.now(timezone.utc).isoformat(),
+        **preserve_fields
     })
     
     # Aggregate all activities for the same day

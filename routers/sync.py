@@ -372,12 +372,20 @@ async def sync_latest(request: Request):
             existing_doc = user_ref.collection("activities").document(act_id).get()
             existing_data = existing_doc.to_dict() if existing_doc.exists else {}
 
-            # 既存の ai_feedback と rpe を保持
+            # 既存のデータを保持
             preserve_fields = {
                 k: v for k, v in existing_data.items() 
-                if k in ["ai_feedback", "rpe"]
+                if k in ["ai_feedback", "rpe", "report_status", "is_new_activity"]
             }
-            is_new_activity = False if 'ai_feedback' in preserve_fields else True
+            
+            is_new_activity = preserve_fields.get("is_new_activity", True)
+            if "ai_feedback" in preserve_fields:
+                is_new_activity = False
+                
+            report_status = preserve_fields.get("report_status", "pending")
+            
+            preserve_fields.pop("is_new_activity", None)
+            preserve_fields.pop("report_status", None)
 
             user_ref.collection("activities").document(act_id).set({
                 "name": act.get("name"),
@@ -392,8 +400,9 @@ async def sync_latest(request: Request):
                 "metrics": metrics,
                 "profile_key": metrics.get("profile_key"),
                 "is_new_activity": is_new_activity,
+                "report_status": report_status,
                 "synced_at": datetime.now(timezone.utc).isoformat(),
-                **preserve_fields  # ← 既存の ai_feedback と rpe を保持                
+                **preserve_fields  # ← 既存の評価・レポート関連データを保持                
             })
     
     # Recalculate PMC everything up to today
