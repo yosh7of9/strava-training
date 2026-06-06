@@ -26,19 +26,19 @@ class ActivityAnalyzer:
         np_val = np.mean(rolling_avg ** 4) ** 0.25
         return round(float(np_val), 1)
 
-    def guess_workout(self) -> float:
+    def guess_workout(self) -> bool:
         """ ERGつきワークアウトならパワー変動が極端に小さいはず。それを検出してERGワークアウト判定
         """
         dat = np.array([v for v in self.power if v > 0])
         offset = (15 * 60) if len(dat) > (40 * 60) else int(len(dat)*.4)
         dat = dat[offset:(-offset)] # 真ん中の区間だけ抽出
         dat = np.abs(np.diff(dat))
-        if len(dat) <= 300:
+        if len(dat) <= 180:
             r = np.std(dat)
         else:
-            d = np.convolve(dat, np.ones(300), mode='valid')
+            d = np.convolve(dat, np.ones(180), mode='valid')
             i = np.argmin(d)
-            r = np.std(dat[i:(i+300)])
+            r = np.std(dat[i:(i+180)])
         return  r< 3
 
     def get_vi(self) -> float:
@@ -306,12 +306,12 @@ class ActivityAnalyzer:
         }
 
     def judge_activity_type(self, act_type: str) -> str:
-        if act_type != 'VirtualRide':
-            return 'Ride'
-        elif self.guess_workout():
+        if self.guess_workout():
             return 'Workout'
-        else:
+        elif act_type == 'VirtualRide':
             return 'GroupRide'
+        else:
+            return 'Ride'
         
     def get_profile_fingerprint(self, act_type: str) -> str:
         """
