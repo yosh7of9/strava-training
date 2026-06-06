@@ -38,7 +38,7 @@ async def update_settings(
     schedule_wed: str = Form("Endurance"),
     schedule_thu: str = Form("Threshold"),
     schedule_fri: str = Form("Endurance"),
-    schedule_sat: str = Form("Long Endurance"),
+    schedule_sat: str = Form("Endurance"),
     schedule_sun: str = Form("Rest"),
 ):
     user_id = request.session.get("user_id")

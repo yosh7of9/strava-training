@@ -314,7 +314,7 @@ async def evaluate_activity(request: Request, act_id: str):
         
     # 3. Build Prompt for AI personal coach
     metrics = act_data.get("metrics", {})
-    tiz_str = ", ".join([f"{k}: {v}%" for k, v in metrics.get("time_in_zones", {}).items() if v > 0])
+    tiz_str = ", ".join([f"{k}: {v}min" for k, v in metrics.get("time_in_zones", {}).items() if v > 0])
     
     # Calculate EF and IF for current activity
     current_hr = metrics.get("average_heartrate_active") or act_data.get("average_heartrate")

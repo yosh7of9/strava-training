@@ -167,7 +167,6 @@
                 <option value="SST">Sweet Spot Training (SST)</option>
                 <option value="Threshold">閾値（Threshold）</option>
                 <option value="VO2max">VO2max（最大酸素摂取量）</option>
-                <option value="Long Endurance">ロングライド</option>
             </select>
         </div>
         <div class="ml-auto text-right">
@@ -785,7 +784,7 @@
             }
             document.getElementById('recommendEmoji').textContent = t.emoji;
             document.getElementById('recommendDescription').textContent = t.description;
-            document.getElementById('recommendDetails').textContent = t.details;
+            document.getElementById('recommendDetails').innerHTML = t.details;
             document.getElementById('recommendDuration').textContent = t.duration;
             document.getElementById('recommendIntensity').textContent = t.intensity;
             

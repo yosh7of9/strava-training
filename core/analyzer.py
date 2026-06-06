@@ -1,4 +1,5 @@
 import numpy as np
+import re
 
 class ActivityAnalyzer:
     """
@@ -48,27 +49,59 @@ class ActivityAnalyzer:
         np_val = self.calculate_normalized_power(self.power)
         return round(np_val / avg_power, 2)
 
+    def primary_stimulus(self, tiz) -> str:
+        stimulus_score = {
+            "Recovery": 0.1,  # 非常に低いが 0 ではない重みを与える
+            "Endurance": 1,
+            "Tempo": 2,
+            "SST": 4,
+            "Threshold": 6,
+            "VO2Max": 10,
+            "Anaerobic": 15,
+            "Neuromuscular": 25,
+        }
+
+        primary_zone = "Recovery"
+        max_score = -1
+
+        for z_full, tm in tiz.items():
+            zone_label = z_full.split(' ')[0]
+            # 滞在時間(tm) × 強度スコア でその日の主な刺激を計算
+            score = tm * stimulus_score.get(zone_label, 0)
+            
+            if score > max_score:
+                max_score = score
+                primary_zone = zone_label
+        
+        return primary_zone
+
     def get_time_in_zones(self) -> dict[str, float]:
         """
-        Calculate percentage of time spent in standard Coggan Power Zones.
-        Returns percentages (0.0 to 100.0).
+        Calculate time spent in Modified Coggan Power Zones.
+        Returns duration in minutes for each zone.
         """
+        # 0W（またはNone）を計算から除外することで、信号待ちや下り坂での「踏んでいない時間」が
+        # Z1 (Recovery) に過剰に計上されるのを防ぎ、実際にペダリングしていた時間の強度分布を抽出します。
+        active_power = self.power[self.power > 0]
+
         zones = {
-            "Z1 (Recovery) <55%": self.power < (0.55 * self.ftp),
-            "Z2 (Endurance) 55-75%": (self.power >= (0.55 * self.ftp)) & (self.power < (0.76 * self.ftp)),
-            "Z3 (Tempo) 76-87%": (self.power >= (0.76 * self.ftp)) & (self.power < (0.88 * self.ftp)),
-            "Z4 (Threshold) 88-105%": (self.power >= (0.88 * self.ftp)) & (self.power < (1.06 * self.ftp)),
-            "Z5 (VO2Max) 106-120%": (self.power >= (1.06 * self.ftp)) & (self.power < (1.21 * self.ftp)),
-            "Z6 (Anaerobic) 121-150%": (self.power >= (1.21 * self.ftp)) & (self.power < (1.51 * self.ftp)),
-            "Z7 (Neuromuscular) >150%": self.power >= (1.51 * self.ftp),
+            "Recovery (Z1) <60%": active_power <= (0.60 * self.ftp),
+            "Endurance (Z2) 60-75%": (active_power > (0.60 * self.ftp)) & (active_power <= (0.75 * self.ftp)),
+            "Tempo (Z3) 76-87%": (active_power > (0.75 * self.ftp)) & (active_power <= (0.87 * self.ftp)),
+            "SST (Z4) 88-95%": (active_power > (0.87 * self.ftp)) & (active_power <= (0.95 * self.ftp)),
+            "Threshold (Z4) 95-105%": (active_power > (0.95 * self.ftp)) & (active_power <= (1.05 * self.ftp)),
+            "VO2Max (Z5) 106-120%": (active_power > (1.05 * self.ftp)) & (active_power <= (1.20 * self.ftp)),
+            "Anaerobic (Z6) 121-150%": (active_power > (1.20 * self.ftp)) & (active_power <= (1.50 * self.ftp)),
+            "Neuromuscular (Z7) >150%": active_power > (1.50 * self.ftp),
         }
         
         tiz = {}
-        if self.length == 0:
+        if len(active_power) == 0:
             return tiz
             
         for name, condition in zones.items():
-            tiz[name] = round(float(np.sum(condition) / self.length * 100), 1)
+            # 各秒数の合計を60で割って「分」に変換
+            tiz[name] = round(float(np.sum(condition) / 60.0), 1)
         return tiz
 
     def get_matches_burned(self, threshold_pct=1.2, duration_sec=15) -> int:
@@ -138,6 +171,23 @@ class ActivityAnalyzer:
                 
         return max_search_sec
 
+    def _get_main_set_indices(self) -> tuple[int, int]:
+        """
+        Calculate start and end indices for the main portion of the ride.
+        Excludes warmup and cooldown.
+        """
+        estimated_wu = self._estimate_warmup_duration()
+        wu_cut = max(estimated_wu, 900)  # Min 15 mins
+        estimated_cd = self._estimate_cooldown_duration()
+        cd_cut = max(estimated_cd, 300)  # Min 5 mins
+        
+        # Sanity check: If ride is too short, use proportional fallback
+        if wu_cut + cd_cut >= self.length * 0.7:
+            wu_cut = int(self.length * 0.15)
+            cd_cut = int(self.length * 0.10)
+            
+        return wu_cut, self.length - cd_cut
+
     def get_aerobic_decoupling(self, exclude_edges=True) -> float | None:
         """
         Calculate Aerobic Decoupling (Pw:HR) by comparing the Efficiency Factor (EF = NP/AvgHR)
@@ -154,19 +204,9 @@ class ActivityAnalyzer:
         
         # Smart trimming for Warm-up and Cool-down
         if exclude_edges:
-            estimated_wu = self._estimate_warmup_duration()
-            # Use the longer of estimated warmup or 15 minutes (900 seconds)
-            wu_cut = max(estimated_wu, 900)
-            estimated_cd = self._estimate_cooldown_duration()
-            cd_cut = max(estimated_cd, 300)
-            
-            # Sanity check: If ride is too short to cut that much, fallback to proportional
-            if wu_cut + cd_cut >= self.length * 0.7:
-                wu_cut = int(self.length * 0.15)
-                cd_cut = int(self.length * 0.10)
-                
-            p_stream = p_stream[wu_cut:self.length - cd_cut]
-            h_stream = h_stream[wu_cut:self.length - cd_cut]
+            start_idx, end_idx = self._get_main_set_indices()
+            p_stream = p_stream[start_idx:end_idx]
+            h_stream = h_stream[start_idx:end_idx]
             
         stream_len = len(p_stream)
         if stream_len < 300: # Less than 5 mins left after trimming
@@ -194,18 +234,32 @@ class ActivityAnalyzer:
         decoupling = ((ef1 - ef2) / ef1) * 100.0
         return round(float(decoupling), 2)
 
-    def get_cadence_dropoff(self) -> float | None:
+    def get_cadence_dropoff(self, exclude_edges=True) -> float | None:
         """
         Calculate cadence drop-off between the first and second half of the ride.
+        If exclude_edges is True, automatically removes warm-up and cool-down.
         Returns the difference in RPM (negative means cadence dropped).
         """
         if self.length < 600 or np.mean(self.cadence) < 20:
             return None
             
+        c_stream = self.cadence
+
+        if exclude_edges:
+            start_idx, end_idx = self._get_main_set_indices()
+            c_stream = c_stream[start_idx:end_idx]
+
+        stream_len = len(c_stream)
+        # 少なくとも前後各2分（計4分）のデータが必要
+        if stream_len < 240:
+            return None
+
         # Filter out 0 cadence (coasting) for more accurate pedaling averages
-        half = self.length // 2
-        c1 = self.cadence[:half]
-        c2 = self.cadence[half:]
+        # トレーニング開始直後（最初の25%）と終了直前（最後の25%）を比較することで
+        # 疲労による「タレ」をより鮮明に抽出する
+        window = stream_len // 4
+        c1 = c_stream[:window]
+        c2 = c_stream[-window:]
         
         c1_pedaling = c1[c1 > 0]
         c2_pedaling = c2[c2 > 0]
@@ -295,25 +349,23 @@ class ActivityAnalyzer:
             
         # 4. Zone
         tiz = self.get_time_in_zones()
-        dominant_zone = "Z1"
-        max_pct = 0
-        for z_full, pct in tiz.items():
-            if pct > max_pct:
-                max_pct = pct
-                dominant_zone = z_full.split(" ")[0] # Extracts "Z1" from "Z1 (Recovery) <55%"
+        dominant_zone = self.primary_stimulus(tiz)
                 
         return f"{fmt}_{dur}_{pac}_{dominant_zone}"
 
     def analyze_all(self, act_type: str = '') -> dict:
         """Run all analyses and return a summary dictionary."""
         np_val = self.calculate_normalized_power(self.power)
-        avg_power = np.mean(self.power) if self.length > 0 else 0
+        
+        # 完全に停止（0W）している時間以外を「実走中」として平均計算
+        active_power = self.power[self.power > 0]
+        avg_power = np.mean(active_power) if len(active_power) > 0 else 0
         
         # Precise Work (kJ) = Sum of Watts / 1000
         total_work_kj = np.sum(self.power) / 1000.0
         
         # Precise Averages (Filtered for active movement/pedaling)
-        moving_hr = self.hr[self.power > 10] # Filter for power > 10W to exclude rests
+        moving_hr = self.hr[self.power > 0] # Filter for power > 0W to exclude rests
         avg_hr_moving = np.mean(moving_hr) if len(moving_hr) > 0 else np.mean(self.hr)
         
         pedaling_cadence = self.cadence[self.cadence > 0]

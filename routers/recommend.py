@@ -5,6 +5,36 @@ from core.database import get_db
 
 router = APIRouter(prefix="/recommend", tags=["recommend"])
 
+# TSSに対する各ゾーンのワークアウトパタン（持続時間・レスト時間）
+WORKOUTS = {
+    "VO2max": [
+        {"tss": 16, "duration": "30 分", "intervals": "(5 x 2分 レスト2分)"},
+        {"tss": 24, "duration": "45 分", "intervals": "(5 x 3分 レスト3分)"},
+        {"tss": 34, "duration": "55 分", "intervals": "(5 x 4分 レスト4分)"},
+    ],
+    "Threshold": [
+        {"tss": 25, "duration": "35 分", "intervals": "(2 x 8分 レスト4分)"},
+        {"tss": 34, "duration": "40 分", "intervals": "(2 x 10分 レスト5分)"},
+        {"tss": 53, "duration": "56 分", "intervals": "(3 x 12分 レスト5分)"},
+    ],
+    "SST": [
+        {"tss": 33, "duration": "40 分", "intervals": "(2 x 10分 レスト5分)"},
+        {"tss": 47, "duration": "50 分", "intervals": "(2 x 15分 レスト5分)"},
+        {"tss": 61, "duration": "60 分", "intervals": "(2 x 20分 レスト5分)"},
+        {"tss": 88, "duration": "85 分", "intervals": "(3 x 20分 レスト5分)"},
+    ],
+    "Tempo": [
+        {"tss": 39, "duration": "55 分", "intervals": "(2 x 20分 レスト5分)"},
+        {"tss": 59, "duration": "75 分", "intervals": "(2 x 30分 レスト5分)"},
+        {"tss": 78, "duration": "75 分", "intervals": "(1 x 60分)"},
+    ],
+    "Endurance": [
+        {"tss": 49, "duration": "60 分", "intervals": "(60分)"},
+        {"tss": 74, "duration": "90 分", "intervals": "(90分)"},
+        {"tss": 98, "duration": "120 分", "intervals": "(120分)"},
+    ],
+}
+
 # Training type definitions for FTP improvement
 TRAINING_TYPES = {
     "Rest": {
@@ -14,6 +44,7 @@ TRAINING_TYPES = {
         "description": "今日は休息日です。睡眠と栄養をしっかり摂り、回復に専念しましょう。",
         "details": "トレーニングは不要です。軽いウォーキングやストレッチ程度に留めてください。",
         "duration": "—",
+        "intervals": None,
         "intensity": "—",
     },
     "Recovery": {
@@ -23,6 +54,7 @@ TRAINING_TYPES = {
         "description": "血流を促進し、疲労を抜くための非常に軽いライドです。",
         "details": "心拍数を上げすぎないように。強度は 50-60% FTP を維持してください。物足りなく感じても、決して踏み込みすぎないでください。",
         "duration": "30–45 分",
+        "intervals": None,
         "intensity": "< 60% FTP",
     },
     "Endurance": {
@@ -32,6 +64,7 @@ TRAINING_TYPES = {
         "description": "有酸素能力の土台を作る、会話ができる程度の強度です。",
         "details": "60–75% FTP を維持します。脂肪燃焼効率を高め、スタミナを強化するのに最適です。",
         "duration": "60–90 分",
+        "intervals": None,
         "intensity": "60–75% FTP",
     },
     "Tempo": {
@@ -39,8 +72,9 @@ TRAINING_TYPES = {
         "emoji": "⚡",
         "color": "yellow",
         "description": "乳酸閾値の少し下、持久力とパワーを両立させる強度です。",
-        "details": "76–87% FTP を 20–40 分間継続します。ややきついですが、一定時間維持できるペースです。乳酸除去能力を高めます。",
-        "duration": "60 分 (20–40 分 @ Tempo)",
+        "details": "76–87% FTP を継続します。ややきついですが、一定時間維持できるペースです。乳酸除去能力を高めます。",
+        "duration": "70 分",
+        "intervals": "(2 x 30分レスト5分、または 60分)",
         "intensity": "76–87% FTP",
     },
     "SST": {
@@ -48,8 +82,9 @@ TRAINING_TYPES = {
         "emoji": "🎯",
         "color": "orange",
         "description": "FTP向上に最も効率的と言われる、王道のトレーニングです。",
-        "details": "88–93% FTP をターゲットにします。2×20 分、または 3×15 分（セット間レスト 5 分）が基本構成です。",
-        "duration": "60–75 分 (2×20 分ブロック)",
+        "details": "88–93% FTP をターゲットにします。",
+        "duration": "60–75 分",
+        "intervals": "(2 x 20分 レスト5分)",
         "intensity": "88–93% FTP",
     },
     "Threshold": {
@@ -57,8 +92,9 @@ TRAINING_TYPES = {
         "emoji": "🔥",
         "color": "red",
         "description": "FTP付近でのトレーニングです。閾値そのものを直接引き上げます。",
-        "details": "95–105% FTP で維持します。2×15 分、または 1×30 分を行います。非常に負荷が高いので、十分に回復した状態で行ってください。",
-        "duration": "60 分 (2×15 分ブロック)",
+        "details": "95–105% FTP で維持します。非常に負荷が高いので、十分に回復した状態で行ってください。",
+        "duration": "60 分",
+        "intervals": "(2 x 15分レスト5分 または 30分)",
         "intensity": "95–105% FTP",
     },
     "VO2max": {
@@ -66,23 +102,15 @@ TRAINING_TYPES = {
         "emoji": "💥",
         "color": "purple",
         "description": "有酸素能力の天井を引き上げる、短時間・高強度のインターバルです。",
-        "details": "106–120% FTP で 5×4 分（セット間レスト 4 分）を行います。非常に苦しいですが、効果は絶大です。",
-        "duration": "45–60 分 (5×4 分インターバル)",
+        "details": "106–120% FTP で行います。非常に苦しいですが、効果は絶大です。",
+        "duration": "45–60 分",
+        "intervals": "(5 x 4分 レスト4分)",
         "intensity": "106–120% FTP",
-    },
-    "Long Endurance": {
-        "label": "ロングライド",
-        "emoji": "🗺️",
-        "color": "teal",
-        "description": "長時間走行により、有酸素ベースと脂質代謝能力を徹底的に鍛えます。",
-        "details": "60–75% FTP で長時間走り続けます。強度は上げすぎず、一貫性とサドルの上での時間を重視してください。",
-        "duration": "2–4 時間",
-        "intensity": "60–75% FTP",
     },
 }
 
 # Intensity ranking for TSB adjustment
-INTENSITY_RANK = ["Rest", "Recovery", "Endurance", "Long Endurance", "Tempo", "SST", "Threshold", "VO2max"]
+INTENSITY_RANK = ["Rest", "Recovery", "Endurance", "Tempo", "SST", "Threshold", "VO2max"]
 
 def adjust_for_tsb(training_type: str, tsb: float) -> tuple[str, str | None]:
     """
@@ -112,6 +140,36 @@ def adjust_for_tsb(training_type: str, tsb: float) -> tuple[str, str | None]:
             return training_type, warning  # Suggest but don't force upgrade
     
     return training_type, warning
+
+def suggest_workout(target_zone: str, tss_limit: int):
+    target_idx = INTENSITY_RANK.index(target_zone)
+    candidates = []
+    for zone_idx, zone in enumerate(INTENSITY_RANK):
+        distance = abs(zone_idx - target_idx)
+        for w in WORKOUTS.get(zone, {}):
+            if len(w) == 0:
+                continue
+            if w["tss"] <= tss_limit:
+                candidates.append({
+                    "zone": zone,
+                    "distance": distance,
+                    **w
+                })
+    if not candidates:
+        return None
+    candidates.sort(
+        key=lambda x: (
+            x["distance"],      # 希望ゾーン優先
+            -x["tss"]           # 同距離ならTSS最大
+        )
+    )
+    best = candidates[0]
+    return {
+        "zone": best["zone"],
+        "intervals": best["intervals"],
+        "tss": best["tss"],
+        "duration": best["duration"]
+    }
 
 
 def generate_default_schedule(rest_days: list[str]) -> dict[str, str]:
@@ -145,7 +203,7 @@ def generate_default_schedule(rest_days: list[str]) -> dict[str, str]:
     # Fourth pass: weekends (non-rest) → Long Endurance
     for d in weekends:
         if d not in rest_set:
-            schedule[d] = "Long Endurance"
+            schedule[d] = "Endurance"
     
     # Fifth pass: remaining weekdays — add one VO2max, rest SST
     vo2max_assigned = False
@@ -227,6 +285,7 @@ async def get_today_recommendation(request: Request):
     
     # Calculate TSS allowance if TSB is low (<= -10)
     tss_allowance = None
+    # テスト用に条件を緩める場合はここを調整（例: tsb < 0）
     warning = None
     if tsb <= -10:
         # Target TSB formula provided by user
@@ -244,78 +303,30 @@ async def get_today_recommendation(request: Request):
             upgraded_label = TRAINING_TYPES[upgraded]["label"]
             warning = f"✅ TSBが {tsb:.1f} です（絶好調！）。余裕があればプルダウンから「{upgraded_label}」に挑戦してみるのも良いでしょう。"
 
-    raw_training_info = TRAINING_TYPES.get(adjusted_type, TRAINING_TYPES["Endurance"])
-    # Convert % FTP to Watts for better UX
-    training_info = format_training_with_ftp(raw_training_info, ftp)
+    # 基本となるトレーニング情報を取得（辞書を壊さないようコピー）
+    base_info = TRAINING_TYPES.get(adjusted_type, TRAINING_TYPES["Endurance"]).copy()
     
-    # Adjust Duration/Details for any training if TSB is low
-    if tss_allowance is not None:
-        def calc_m(sets, intensity_factor):
-            # Base TSS for WU/CD/Rest (approx 30-35 min) is around 12-15
-            base_tss = 10 + (sets * 2) # Heuristic
-            available = tss_allowance - base_tss
-            if available <= 0: return 0
-            # M = (available_tss * 60) / (sets * intensity^2 * 100)
-            return round((available * 60) / (sets * (intensity_factor**2) * 100))
+    # Refine based on TSS limit if TSB is low
+    if (tss_allowance is not None) and (adjusted_type not in ["Rest", "Recovery"]):
+        workout = suggest_workout(adjusted_type, tss_allowance)
+        if workout:
+            # 提案されたワークアウトのゾーンが予定と異なる場合、そのゾーンの基本情報をベースにする
+            if workout["zone"] != adjusted_type:
+                base_info = TRAINING_TYPES[workout["zone"]].copy()
+            
+            base_info["duration"] = workout['duration']
+            base_info["details"] += f"<br>【推奨メニュー】{workout['duration']} {workout['intervals']} (推定TSS: {workout['tss']})"
+        else:
+            # TSS上限に合うメニューがない場合、強制的にリカバリー
+            base_info = TRAINING_TYPES["Recovery"].copy()
+            base_info["details"] = "⚠️ TSS許容上限が非常に低いため、積極的休養（リカバリー）を強く推奨します。"
+            base_info["duration"] = "—"
+    else:
+        base_info["details"] += f"<br>【メニュー】{base_info['duration']}" 
+        base_info["details"] += base_info['intervals'] if base_info['intervals'] else ''
 
-        if adjusted_type == "Endurance":
-            min_dur = round((tss_allowance * 60) / 56.25)
-            max_dur = round((tss_allowance * 60) / 36.0)
-            training_info["duration"] = f"{min_dur}–{max_dur} 分 (上限)"
-            
-        elif adjusted_type == "Long Endurance":
-            if tss_allowance < 168.75:
-                if tss_allowance < 72:
-                    training_info["duration"] = "120 分 (上限)"
-                    high_pct = round((tss_allowance * 50) ** 0.5)
-                    low_pct = round(high_pct * 0.8)
-                elif tss_allowance <= 108:
-                    max_dur_mins = round((tss_allowance * 60) / 36)
-                    training_info["duration"] = f"120–{max_dur_mins} 分 (上限)"
-                    low_pct = 60
-                    high_pct = 60
-                else:
-                    training_info["duration"] = "120–180 分 (上限)"
-                    low_pct = 60
-                    high_pct = round((tss_allowance * 100 / 3) ** 0.5)
-                
-                low_w = int(ftp * low_pct / 100)
-                high_w = int(ftp * high_pct / 100)
-                
-                if low_pct == high_pct:
-                    training_info["intensity"] = f"{low_w}W"
-                    training_info["details"] = f"{low_w}W を維持して走り続けます。強度は上げすぎず、一貫性とサドルの上での時間を重視してください。"
-                else:
-                    training_info["intensity"] = f"{low_w}–{high_w}W"
-                    training_info["details"] = f"{low_w}–{high_w}W を維持して走り続けます。強度は上げすぎず、一貫性とサドルの上での時間を重視してください。"
-            
-        elif adjusted_type in ["Tempo", "SST", "Threshold", "VO2max"]:
-            # Map types to target intensity factors
-            ifs = {"Tempo": 0.82, "SST": 0.90, "Threshold": 1.0, "VO2max": 1.13}
-            target_if = ifs.get(adjusted_type, 0.9)
-            
-            # Update duration label
-            m2 = calc_m(2, target_if)
-            if m2 > 0:
-                m2_f = min(m2, 20) # Default cap for duration label display
-                training_info["duration"] = f"{30 + 2*m2_f} 分 (2×{m2_f} 分ブロック)"
-            
-            # Update details text dynamically with a cap at the original value
-            import re
-            def replacer(match):
-                sets = int(match.group(1))
-                original_m = int(match.group(2))
-                m = calc_m(sets, target_if)
-                # Never exceed the original planned duration
-                final_m = min(m, original_m)
-                return f"{sets}×{final_m} 分"
-            
-            # Note: We now match "分" since the base strings are Japanese
-            pattern = r"(\d+)×(\d+) 分"
-            training_info["details"] = re.sub(pattern, replacer, training_info["details"])
-            
-            if m2 <= 0:
-                training_info["details"] = "⚠️ TSS許容上限が低すぎます。完全休息またはリカバリーを推奨します。"
+    # 最終的なワット数変換を適用
+    training_info = format_training_with_ftp(base_info, ftp)
 
     return {
         "day": today,
